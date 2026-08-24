@@ -37,7 +37,7 @@ export function AdminRouteGuard({ children }: AdminRouteGuardProps) {
           <ShieldAlert aria-hidden className="size-10 text-danger" />
           <p className="text-sm font-medium">{t.admin.login.forbidden}</p>
           {!user ? (
-            <p className="text-xs text-text-secondary">{t.admin.login.required}</p>
+            <p className="text-xs text-text-secondary">{t.admin.login.sessionExpired}</p>
           ) : null}
           <Link href="/">
             <Button variant="outline" size="sm">
