@@ -12,7 +12,12 @@ function createAuth() {
       provider: "pg",
       schema: { user: users, session: sessions, account: accounts, verification: verifications },
     }),
-    emailAndPassword: { enabled: true },
+    emailAndPassword: {
+      enabled: true,
+      // PROTOTYPE: verification is deferred — flip this once Resend sends
+      // verification emails, then add the verify-callback route
+      requireEmailVerification: false,
+    },
     secret: env.betterAuthSecret,
     // Trailing slashes make Better Auth build URLs like /api/auth with "//"
     baseURL: env.betterAuthUrl.replace(/\/+$/, ""),

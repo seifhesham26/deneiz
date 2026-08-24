@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { pushToast } from "@/components/ui/toast";
 import { useLang } from "@/components/providers/lang-provider";
 import { authClient } from "@/lib/better-auth-client";
+import { AuthCard } from "@/components/storefront/account/auth-card";
 import { useGetSessionUser } from "@/hooks/storefront/useGetSessionUser";
 import { useGetMyOrders } from "@/hooks/storefront/useGetMyOrders";
 import { formatCurrency } from "@/utils/format-currency";
@@ -33,47 +33,11 @@ function translateStatus(status: string, t: Dictionary): string {
   return map[status] ?? status;
 }
 
-interface AuthFormValues {
-  name?: string;
-  email: string;
-  password: string;
-}
-
 export default function AccountPage() {
   const { locale, t } = useLang();
+  const queryClient = useQueryClient();
   const { user, isLoading } = useGetSessionUser();
-  const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
-  const [form, setForm] = useState<AuthFormValues>({ email: "", password: "" });
-  const [submitting, setSubmitting] = useState(false);
-
   const myOrders = useGetMyOrders();
-
-  async function handleAuthSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSubmitting(true);
-    try {
-      if (mode === "signIn") {
-        const result = await authClient.signIn.email({
-          email: form.email,
-          password: form.password,
-        });
-        if (result.error) {
-          pushToast(result.error.message ?? t.errors.generic, "error");
-        }
-      } else {
-        const result = await authClient.signUp.email({
-          name: form.name ?? "",
-          email: form.email,
-          password: form.password,
-        });
-        if (result.error) {
-          pushToast(result.error.message ?? t.errors.generic, "error");
-        }
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }
 
   async function handleSignOut() {
     await authClient.signOut();
@@ -85,64 +49,12 @@ export default function AccountPage() {
   }
 
   if (!user) {
-    return (
-      <div className="content-shell section-y flex justify-center">
-        <form
-          onSubmit={handleAuthSubmit}
-          className="flex w-full max-w-md flex-col gap-4 rounded-2xl border border-border bg-surface-raised p-6"
-        >
-          <h1 className="text-2xl font-semibold">{mode === "signIn" ? t.account.signIn : t.account.signUp}</h1>
-          <p className="text-sm text-text-secondary">{t.account.guestNote}</p>
-
-          {mode === "signUp" ? (
-            <Input
-              label={t.account.name}
-              value={form.name ?? ""}
-              onChange={(event) => setForm((state) => ({ ...state, name: event.target.value }))}
-              required
-              minLength={2}
-            />
-          ) : null}
-
-          <Input
-            label={t.account.email}
-            type="email"
-            dir="ltr"
-            autoComplete="email"
-            value={form.email}
-            onChange={(event) => setForm((state) => ({ ...state, email: event.target.value }))}
-            required
-          />
-
-          <Input
-            label={t.account.password}
-            type="password"
-            dir="ltr"
-            autoComplete={mode === "signIn" ? "current-password" : "new-password"}
-            value={form.password}
-            onChange={(event) => setForm((state) => ({ ...state, password: event.target.value }))}
-            required
-            minLength={8}
-          />
-
-          <Button type="submit" isLoading={submitting}>
-            {mode === "signIn" ? t.account.signIn : t.account.signUp}
-          </Button>
-
-          <button
-            type="button"
-            onClick={() => setMode(mode === "signIn" ? "signUp" : "signIn")}
-            className="text-center text-xs text-text-secondary hover:text-accent"
-          >
-            {mode === "signIn" ? t.account.createAccountCta : t.account.haveAccountCta}
-          </button>
-        </form>
-      </div>
-    );
+    // Refetching the session swaps the card for the dashboard without a reload
+    return <AuthCard onSuccess={() => void queryClient.invalidateQueries()} />;
   }
 
   return (
-    <div className="content-shell section-y flex flex-col gap-8">
+    <div className="content-shell section-y flex flex-col gap-10">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-semibold">{t.account.welcome(user.name)}</h1>
@@ -155,36 +67,45 @@ export default function AccountPage() {
         </Button>
       </header>
 
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-4">
         <h2 className="text-xl font-semibold">{t.account.myOrders}</h2>
 
         {myOrders.isLoading ? (
           <p className="text-sm text-text-secondary">{t.common.loading}</p>
         ) : myOrders.data && myOrders.data.items.length > 0 ? (
-          <ul className="divide-y divide-border rounded-2xl border border-border bg-surface-raised">
+          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface-raised">
             {myOrders.data.items.map((order) => (
-              <li key={order.id} className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
+              <li
+                key={order.id}
+                className="grid items-center gap-3 p-4 text-sm"
+                style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))" }}
+              >
                 <span className="font-mono font-medium" dir="ltr">
                   {order.orderNumber}
                 </span>
                 <span className="text-text-secondary">{formatDate(order.createdAt, locale)}</span>
-                <Badge tone={orderStatusTone(order.status)}>
-                  {translateStatus(order.status, t)}
-                </Badge>
+                <Badge tone={orderStatusTone(order.status)}>{translateStatus(order.status, t)}</Badge>
                 <Badge tone={order.paymentStatus === "collected" ? "success" : "neutral"}>
                   {(t.statuses.payment as Record<string, string>)[order.paymentStatus] ?? order.paymentStatus}
                 </Badge>
-                <span className="font-semibold">{formatCurrency(order.total, locale)}</span>
+                <span className="font-semibold lg:text-end">
+                  {formatCurrency(order.total, locale)}
+                </span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-text-secondary">{t.cart.empty}</p>
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-surface-raised p-10 text-center">
+            <p className="text-sm text-text-secondary">{t.cart.empty}</p>
+            <Link href="/products">
+              <Button size="sm">{t.cart.continueShopping}</Button>
+            </Link>
+          </div>
         )}
       </section>
 
       {(user.role === "super_admin" || user.role === "manager" || user.role === "staff") && (
-        <Link href="/admin" className="self-start text-sm text-accent hover:underline">
+        <Link href="/admin" className="self-start text-sm font-medium text-accent hover:underline">
           → {t.nav.adminPanel}
         </Link>
       )}
