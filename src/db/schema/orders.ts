@@ -11,7 +11,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { customers } from "./customers";
-import { products } from "./products";
+import { products, productVariants } from "./products";
 import { users } from "./users";
 
 export const orderStatusEnum = pgEnum("order_status", [
@@ -81,6 +81,11 @@ export const orderItems = pgTable("order_items", {
   }),
   productNameEn: text("productNameEn").notNull(),
   productNameAr: text("productNameAr").notNull(),
+  /** Which variant was sold. Needed to return variant stock on cancellation —
+   *  variantLabel is a display snapshot and cannot be resolved back to a row. */
+  variantId: uuid("variantId").references(() => productVariants.id, {
+    onDelete: "set null",
+  }),
   /** Snapshot like "Size M · Gold" — survives variant deletion */
   variantLabel: text("variantLabel"),
   imageUrl: text("imageUrl"),

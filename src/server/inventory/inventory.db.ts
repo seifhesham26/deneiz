@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { containsPattern } from "@/utils/escape-like";
 import { getDb } from "@/db";
 import { inventoryLogs, products, users } from "@/db/schema";
+import { appError } from "../app-error";
 
 /**
  * Applies a signed stock delta and appends the ledger row atomically.
@@ -28,7 +29,7 @@ export async function adjustStock(record: {
       .returning({ stockQuantity: products.stockQuantity });
 
     if (!updated.length) {
-      throw new Error("Stock adjustment rejected — result would go below zero");
+      throw appError("CONFLICT", "stockBelowZero");
     }
 
     await tx.insert(inventoryLogs).values({

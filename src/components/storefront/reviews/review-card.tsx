@@ -1,10 +1,11 @@
 "use client";
 
-import { Star } from "lucide-react";
+import { BadgeCheck, Star } from "lucide-react";
 import { formatDate } from "@/utils/format-date";
 import type { Locale } from "@/types/shared";
 import type { ReviewListItem } from "@/types/api";
 import { cn } from "@/lib/cn";
+import { useLang } from "@/components/providers/lang-provider";
 
 interface ReviewCardProps {
   review: ReviewListItem;
@@ -12,10 +13,20 @@ interface ReviewCardProps {
 }
 
 export function ReviewCard({ review, locale }: ReviewCardProps) {
+  const { t } = useLang();
+
   return (
     <article className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface-raised p-4">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium">{review.authorName}</span>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-sm font-medium">{review.authorName}</span>
+          {review.isVerifiedPurchase ? (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+              <BadgeCheck aria-hidden className="size-3.5" />
+              {t.product.verifiedPurchase}
+            </span>
+          ) : null}
+        </div>
         <span className="text-xs text-text-muted">{formatDate(review.createdAt, locale)}</span>
       </div>
 

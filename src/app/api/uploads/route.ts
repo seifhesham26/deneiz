@@ -45,8 +45,14 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Cheap first gate before formData() buffers the whole body into memory
-  const declaredLength = Number(request.headers.get("content-length") ?? 0);
+  // Gate before formData() buffers the whole body into memory. A missing header
+  // means a chunked body whose size cannot be known in advance, which would let
+  // an unbounded upload through this check — so require it rather than
+  // defaulting to 0 and passing.
+  const declaredLength = Number(request.headers.get("content-length"));
+  if (!Number.isFinite(declaredLength) || declaredLength <= 0) {
+    return NextResponse.json({ error: "Content-Length required" }, { status: 411 });
+  }
   if (declaredLength > MAX_FILE_BYTES) {
     return NextResponse.json({ error: "Image exceeds 5MB" }, { status: 413 });
   }

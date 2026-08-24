@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ne, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { getDb } from "@/db";
-import { products, reviews } from "@/db/schema";
+import { appError } from "../app-error";
+import { orderItems, orders, products, reviews } from "@/db/schema";
 
 export async function listApprovedReviewsForProduct(
   productId: string,
@@ -19,6 +20,7 @@ export async function listApprovedReviewsForProduct(
       rating: reviews.rating,
       title: reviews.title,
       body: reviews.body,
+      isVerifiedPurchase: reviews.isVerifiedPurchase,
       createdAt: reviews.createdAt,
     })
     .from(reviews)
@@ -47,9 +49,56 @@ export async function getRatingSummary(productId: string) {
   return { average: summary.average ?? null, total: summary.total };
 }
 
+/**
+ * Did this account actually buy this product? Cancelled orders do not count —
+ * a cancelled purchase is not a purchase.
+ */
+export async function hasPurchasedProduct(userId: string, productId: string): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ orderId: orders.id })
+    .from(orders)
+    .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+    .where(
+      and(
+        eq(orders.userId, userId),
+        eq(orderItems.productId, productId),
+        ne(orders.status, "cancelled"),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+/** Backs the friendly duplicate message; the partial unique index is the guard. */
+export async function hasReviewedProduct(userId: string, productId: string): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ id: reviews.id })
+    .from(reviews)
+    .where(and(eq(reviews.userId, userId), eq(reviews.productId, productId)))
+    .limit(1);
+  return Boolean(row);
+}
+
 export async function insertReview(values: typeof reviews.$inferInsert) {
-  const [created] = await getDb().insert(reviews).values(values).returning({ id: reviews.id });
-  return created;
+  try {
+    const [created] = await getDb().insert(reviews).values(values).returning({ id: reviews.id });
+    return created;
+  } catch (error) {
+    // The service already checks for an existing review; this catches the race
+    // where two submissions arrive together and the partial unique index wins.
+    if (isUniqueViolation(error)) throw appError("CONFLICT", "duplicateReview");
+    throw error;
+  }
+}
+
+/** Postgres unique_violation. Narrowed here rather than trusting the message text. */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23505"
+  );
 }
 
 export async function listReviewsForAdmin(filters: {

@@ -392,6 +392,19 @@ export async function deleteProductById(id: string): Promise<void> {
   await database.delete(products).where(eq(products.id, id));
 }
 
+/**
+ * Every published product, unpaginated — the sitemap must list the whole
+ * catalogue. Deliberately narrow (slug + updatedAt) so returning all rows stays
+ * cheap no matter how large the catalogue grows.
+ */
+export async function listPublishedProductSlugs() {
+  return getDb()
+    .select({ slug: products.slug, updatedAt: products.updatedAt })
+    .from(products)
+    .where(eq(products.status, "published"))
+    .orderBy(desc(products.updatedAt), asc(products.id));
+}
+
 export async function getProductsByIds(ids: string[]) {
   const database = getDb();
   if (!ids.length) return [];

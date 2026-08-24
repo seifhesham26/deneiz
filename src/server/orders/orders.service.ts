@@ -2,13 +2,15 @@ import { randomInt } from "node:crypto";
 import { ORDER_NUMBER_PREFIX, STORE_TIMEZONE } from "@/lib/constants";
 import { sendOrderConfirmationEmail } from "@/lib/resend";
 import { normalizePhoneNumber } from "@/utils/normalize-phone";
-import { adjustStock } from "../inventory/inventory.db";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { appError } from "../app-error";
 import { getSettings } from "@/server/settings/settings.db";
 import { upsertCustomerByPhone, isCustomerBannedByPhone } from "../customers/customers.db";
 import { getProductsByIds, getVariantsByIds } from "../products/products.db";
 import { calculateShipping } from "@/utils/calculate-shipping";
 import {
+  cancelOrderAndRestock,
+  getOrderByNumber,
   listOrdersForAdmin,
   listOrdersForUser,
   getOrderWithItems,
@@ -153,6 +155,9 @@ export async function placeOrder(input: CreateOrderInput, userId: string | null)
       productNameEn: product.nameEn,
       productNameAr: product.nameAr,
       imageUrl: product.coverImageUrl,
+      // Recorded so cancellation can return the stock to the exact variant;
+      // variantLabel is a display snapshot and cannot be resolved back to a row
+      variantId: validVariant?.id ?? null,
       variantLabel: labelParts.length > 0 ? labelParts : null,
       unitPrice,
       quantity: item.quantity,
@@ -212,18 +217,7 @@ export async function cancelAndRestock(orderId: string) {
   }
   assertTransitionAllowed(record.status, "cancelled");
 
-  for (const item of record.items) {
-    if (!item.productId) continue;
-    await adjustStock({
-      productId: item.productId,
-      changeAmount: item.quantity,
-      reason: "return",
-      note: `Restock from cancelled order ${record.orderNumber}`,
-      createdByUserId: null,
-    });
-  }
-
-  await persistOrderStatus(orderId, "cancelled");
+  await cancelOrderAndRestock(orderId, record.orderNumber);
 }
 
 function assertTransitionAllowed(from: OrderStatus, to: OrderStatus): void {
@@ -234,6 +228,13 @@ function assertTransitionAllowed(from: OrderStatus, to: OrderStatus): void {
 }
 
 export async function changeOrderStatus(orderId: string, status: OrderStatus) {
+  // Cancelling has to return stock, which only cancelAndRestock does. Routing
+  // is the router's job today, but nothing here enforced it — a future caller
+  // reaching this function directly would silently strand the reserved units.
+  if (status === "cancelled") {
+    return cancelAndRestock(orderId);
+  }
+
   const record = await getOrderWithItems(orderId);
   if (!record) throw appError("NOT_FOUND", "orderNotFound");
   assertTransitionAllowed(record.status, status);
@@ -254,6 +255,56 @@ export async function changePaymentStatus(
     });
   }
   await persistPaymentStatus(orderId, paymentStatus);
+}
+
+const LOOKUP_RATE_LIMIT = 10;
+const LOOKUP_RATE_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * Guest order tracking. Checkout is open to guests, so without this an order
+ * placed without an account could never be seen again once the confirmation
+ * screen was closed.
+ *
+ * Rate limited per caller because the order number is short and guessable in
+ * principle; the phone number must match the one on the order, compared in
+ * canonical form so the customer need not remember how they typed it.
+ */
+export async function lookupOrder(
+  orderNumber: string,
+  phoneNumber: string,
+  clientKey: string,
+) {
+  const limit = checkRateLimit(`order-lookup:${clientKey}`, LOOKUP_RATE_LIMIT, LOOKUP_RATE_WINDOW_MS);
+  if (!limit.allowed) throw appError("TOO_MANY_REQUESTS", "tooManyRequests");
+
+  const order = await getOrderByNumber(orderNumber.trim().toUpperCase());
+
+  // One message for "no such order" and "wrong phone" alike — distinguishing
+  // them would confirm that an order number exists
+  const canonical = normalizePhoneNumber(phoneNumber);
+  if (!order || normalizePhoneNumber(order.phoneNumber) !== canonical) {
+    throw appError("NOT_FOUND", "orderLookupFailed");
+  }
+
+  // Deliberately narrow: tracking needs status and contents, not the full row
+  return {
+    orderNumber: order.orderNumber,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    createdAt: order.createdAt,
+    subtotal: order.subtotal,
+    shippingFee: order.shippingFee,
+    total: order.total,
+    items: order.items.map((item) => ({
+      id: item.id,
+      productNameEn: item.productNameEn,
+      productNameAr: item.productNameAr,
+      variantLabel: item.variantLabel,
+      imageUrl: item.imageUrl,
+      quantity: item.quantity,
+      lineTotal: item.lineTotal,
+    })),
+  };
 }
 
 export async function listOrders(filters: {

@@ -1,6 +1,6 @@
 import { publicProcedure, adminProcedure, requireRoles, router } from "../trpc";
+import { appError } from "../app-error";
 import { DESTRUCTIVE_ROLES } from "@/lib/constants";
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { bannerCreateSchema, bannerIdInputSchema, bannerUpdateSchema } from "./banners.validators";
 import { getBannerById } from "./banners.db";
@@ -24,7 +24,7 @@ export const bannersRouter = router({
   getById: adminProcedure.input(bannerIdInputSchema).query(async ({ input }) => {
     const banner = await getBannerById(input.id);
     if (!banner) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Banner not found" });
+      throw appError("NOT_FOUND", "bannerNotFound");
     }
     return banner;
   }),

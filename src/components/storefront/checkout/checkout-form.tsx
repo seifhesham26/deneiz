@@ -93,7 +93,16 @@ export function CheckoutForm() {
             {placedOrderNumber}
           </strong>
         </p>
-        <Button onClick={() => router.push("/products")}>{t.confirmation.continueShopping}</Button>
+        {/* This screen is component state — a refresh loses it. A guest has no
+            order history, so the number and the tracking page are the only way
+            back to the order. */}
+        <p className="max-w-md text-sm text-text-secondary">{t.confirmation.keepNumber}</p>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button onClick={() => router.push("/products")}>{t.confirmation.continueShopping}</Button>
+          <Button variant="outline" onClick={() => router.push("/orders/lookup")}>
+            {t.confirmation.trackOrder}
+          </Button>
+        </div>
       </div>
     );
   }

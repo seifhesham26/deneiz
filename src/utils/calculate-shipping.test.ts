@@ -16,4 +16,9 @@ describe("calculateShipping", () => {
   it("never charges delivery on an empty cart", () => {
     expect(calculateShipping(0, settings)).toBe(0);
   });
+
+  it("treats a zero threshold as free shipping disabled, not always free", () => {
+    expect(calculateShipping(50, { shippingFee: 25, freeShippingThreshold: 0 })).toBe(25);
+    expect(calculateShipping(100000, { shippingFee: 25, freeShippingThreshold: 0 })).toBe(25);
+  });
 });

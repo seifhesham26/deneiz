@@ -1,6 +1,6 @@
 import { publicProcedure, adminProcedure, requireRoles, router } from "../trpc";
+import { appError } from "../app-error";
 import { DESTRUCTIVE_ROLES } from "@/lib/constants";
-import { TRPCError } from "@trpc/server";
 import {
   categoryCreateSchema,
   categoryIdInputSchema,
@@ -17,7 +17,7 @@ export const categoriesRouter = router({
   getById: adminProcedure.input(categoryIdInputSchema).query(async ({ input }) => {
     const category = await getCategoryById(input.id);
     if (!category) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Category not found" });
+      throw appError("NOT_FOUND", "categoryNotFound");
     }
     return category;
   }),

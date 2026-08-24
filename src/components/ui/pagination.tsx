@@ -23,7 +23,7 @@ export function Pagination({ page, pageCount, onPageChange, className }: Paginat
   return (
     <nav
       className={`flex items-center justify-center gap-1.5 ${className ?? ""}`}
-      aria-label="pagination"
+      aria-label={t.common.pagination}
     >
       <PaginationArrow
         direction="start"

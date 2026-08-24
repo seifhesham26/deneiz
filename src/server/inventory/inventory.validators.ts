@@ -13,7 +13,7 @@ export const adjustStockInputSchema = z.object({
   changeAmount: z.coerce
     .number()
     .int()
-    .refine((value) => value !== 0, { message: "change must be non-zero" }),
+    .refine((value) => value !== 0, { message: "changeNonZero" }),
   reason: z.enum(["restock", "sale", "return", "adjustment", "damage", "other"]).default("adjustment"),
   note: optionalText(500),
 });

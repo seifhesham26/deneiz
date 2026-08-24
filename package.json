@@ -16,7 +16,8 @@
     "seed": "tsx scripts/seed.ts",
     "prepare": "husky || true",
     "db:migrate": "drizzle-kit migrate",
-    "normalize-phones": "tsx scripts/normalize-customer-phones.ts"
+    "normalize-phones": "tsx scripts/normalize-customer-phones.ts",
+    "db:baseline": "tsx scripts/baseline-migrations.ts"
   },
   "dependencies": {
     "@better-auth/infra": "^0.4.2",

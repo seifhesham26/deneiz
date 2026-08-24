@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import type { Dictionary } from "@/lib/dictionary";
 
 /**
  * Business failures travel as a dictionary key plus params, never as a
@@ -11,9 +12,19 @@ import { TRPCError } from "@trpc/server";
  */
 export type AppErrorParams = Record<string, string | number>;
 
+/**
+ * Only keys that actually exist in the dictionary may be thrown. Type-only
+ * import, so no dictionary data reaches the server bundle.
+ *
+ * DeepDictionary already guarantees the two locales agree with each other; it
+ * cannot tell whether a thrown key exists at all, and an unknown key degrades
+ * silently to errors.generic. This turns that into a compile error.
+ */
+export type AppErrorKey = keyof Dictionary["errors"];
+
 export class AppErrorCause extends Error {
   constructor(
-    readonly key: string,
+    readonly key: AppErrorKey,
     readonly params: AppErrorParams,
   ) {
     super(key);
@@ -32,7 +43,7 @@ type AppErrorCode =
 
 export function appError(
   code: AppErrorCode,
-  key: string,
+  key: AppErrorKey,
   params: AppErrorParams = {},
 ): TRPCError {
   return new TRPCError({

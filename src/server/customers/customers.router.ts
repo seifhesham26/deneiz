@@ -1,6 +1,6 @@
 import { adminProcedure, requireRoles, router } from "../trpc";
+import { appError } from "../app-error";
 import { DESTRUCTIVE_ROLES } from "@/lib/constants";
-import { TRPCError } from "@trpc/server";
 import { customerIdInputSchema, customerListQuerySchema, setCustomerBanInputSchema } from "./customers.validators";
 import { getCustomerOverview, getCustomerProfile, toggleCustomerBan } from "./customers.service";
 
@@ -12,7 +12,7 @@ export const customersRouter = router({
   getById: adminProcedure.input(customerIdInputSchema).query(async ({ input }) => {
     const profile = await getCustomerProfile(input.id);
     if (!profile) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Customer not found" });
+      throw appError("NOT_FOUND", "customerNotFound");
     }
     return profile;
   }),

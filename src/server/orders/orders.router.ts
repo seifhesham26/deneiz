@@ -1,9 +1,10 @@
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "../trpc";
-import { TRPCError } from "@trpc/server";
+import { appError } from "../app-error";
 import {
   createOrderInputSchema,
   myOrdersFiltersSchema,
   orderIdInputSchema,
+  orderLookupInputSchema,
   orderAdminFiltersSchema,
   setPaymentStatusInputSchema,
   updateOrderStatusInputSchema,
@@ -15,6 +16,7 @@ import {
   getOrderDetail,
   listMyOrders,
   listOrders,
+  lookupOrder,
   placeOrder,
 } from "./orders.service";
 
@@ -24,6 +26,11 @@ export const ordersRouter = router({
     return placeOrder(input, ctx.user?.id ?? null);
   }),
 
+  /** Guest order tracking — order number plus the phone used at checkout */
+  lookup: publicProcedure.input(orderLookupInputSchema).mutation(({ input, ctx }) => {
+    return lookupOrder(input.orderNumber, input.phoneNumber, ctx.user?.id ?? ctx.clientIp);
+  }),
+
   getMine: protectedProcedure.input(myOrdersFiltersSchema).query(({ ctx, input }) => {
     return listMyOrders(ctx.user.id, input.page, input.pageSize);
   }),
@@ -31,7 +38,7 @@ export const ordersRouter = router({
   getById: adminProcedure.input(orderIdInputSchema).query(async ({ input }) => {
     const order = await getOrderDetail(input.id);
     if (!order) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+      throw appError("NOT_FOUND", "orderNotFound");
     }
     return order;
   }),

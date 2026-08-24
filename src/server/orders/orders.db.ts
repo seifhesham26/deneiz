@@ -9,8 +9,10 @@ import {
   orderItems,
   orders,
   products,
+  productVariants,
   reviews,
 } from "@/db/schema";
+import { appError } from "../app-error";
 
 export interface CheckoutOrderRecord {
   orderNumber: string;
@@ -30,6 +32,7 @@ export interface CheckoutOrderRecord {
     productNameEn: string;
     productNameAr: string;
     imageUrl: string | null;
+    variantId: string | null;
     variantLabel: string | null;
     unitPrice: number;
     quantity: number;
@@ -38,8 +41,10 @@ export interface CheckoutOrderRecord {
 }
 
 /**
- * One transaction covers everything checkout mutates: stock reservation,
- * customer upsert, order + item rows, and sale entries in the stock ledger.
+ * One transaction covers every write checkout makes to stock and order state:
+ * product and variant reservation, the order and item rows, and sale entries in
+ * the ledger. The customer row is upserted by the caller beforehand — it is
+ * shared across orders and deliberately survives a failed checkout.
  */
 export async function placeOrderAtomic(
   record: CheckoutOrderRecord,
@@ -56,8 +61,46 @@ export async function placeOrderAtomic(
         .where(and(eq(products.id, item.productId), sql`${products.stockQuantity} >= ${item.quantity}`))
         .returning({ id: products.id });
 
+      // The service pre-checked stock, so reaching here means a concurrent
+      // order took the units in between. That is the message the customer most
+      // needs to read, so it must be a translatable key, not an opaque 500.
+      // The extra read only happens on this rare path, and it is what makes the
+      // count in the message true rather than a guess.
       if (!updated.length) {
-        throw new Error(`Insufficient stock for product ${item.productId}`);
+        const [current] = await tx
+          .select({ stockQuantity: products.stockQuantity })
+          .from(products)
+          .where(eq(products.id, item.productId));
+        throw appError("CONFLICT", "stockOnly", {
+          count: current?.stockQuantity ?? 0,
+          name: item.productNameEn,
+        });
+      }
+
+      // Variant stock is a separate column and was previously validated but
+      // never decremented, so a variant could be sold indefinitely
+      if (item.variantId) {
+        const updatedVariant = await tx
+          .update(productVariants)
+          .set({ stockQuantity: sql`${productVariants.stockQuantity} - ${item.quantity}` })
+          .where(
+            and(
+              eq(productVariants.id, item.variantId),
+              sql`${productVariants.stockQuantity} >= ${item.quantity}`,
+            ),
+          )
+          .returning({ id: productVariants.id });
+
+        if (!updatedVariant.length) {
+          const [current] = await tx
+            .select({ stockQuantity: productVariants.stockQuantity })
+            .from(productVariants)
+            .where(eq(productVariants.id, item.variantId));
+          throw appError("CONFLICT", "stockOnly", {
+            count: current?.stockQuantity ?? 0,
+            name: item.productNameEn,
+          });
+        }
       }
 
       await tx.insert(inventoryLogs).values({
@@ -97,6 +140,7 @@ export async function placeOrderAtomic(
         productNameEn: item.productNameEn,
         productNameAr: item.productNameAr,
         imageUrl: item.imageUrl,
+        variantId: item.variantId,
         variantLabel: item.variantLabel,
         unitPrice: item.unitPrice,
         quantity: item.quantity,
@@ -179,6 +223,86 @@ export async function getOrderWithItems(id: string) {
     .select()
     .from(orderItems)
     .where(eq(orderItems.orderId, id))
+    .orderBy(asc(orderItems.displayOrder), asc(orderItems.id));
+
+  return { ...order, items };
+}
+
+/**
+ * Cancellation in one transaction: product stock, variant stock, ledger returns
+ * and the status flip either all land or none do.
+ *
+ * Previously each line was its own transaction followed by a separate status
+ * write, so a mid-way failure left an order partly restocked but still not
+ * cancelled — and retrying restocked those lines a second time.
+ */
+export async function cancelOrderAndRestock(
+  orderId: string,
+  orderNumber: string,
+): Promise<void> {
+  const database = getDb();
+  await database.transaction(async (tx) => {
+    // The status flip is the guard, and it runs FIRST so it takes the row lock.
+    // A second concurrent cancel blocks here, then matches nothing and returns
+    // without restocking. Checking status before the transaction (as the
+    // service still does, for the error message) cannot prevent two callers
+    // from both passing the check and crediting the stock twice.
+    const flipped = await tx
+      .update(orders)
+      .set({ status: "cancelled", updatedAt: new Date() })
+      .where(and(eq(orders.id, orderId), ne(orders.status, "cancelled")))
+      .returning({ id: orders.id });
+
+    if (!flipped.length) return;
+
+    const lines = await tx
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, orderId));
+
+    for (const line of lines) {
+      // A deleted product nulls productId; there is nothing left to restock
+      if (!line.productId) continue;
+
+      await tx
+        .update(products)
+        .set({
+          stockQuantity: sql`${products.stockQuantity} + ${line.quantity}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(products.id, line.productId));
+
+      if (line.variantId) {
+        await tx
+          .update(productVariants)
+          .set({ stockQuantity: sql`${productVariants.stockQuantity} + ${line.quantity}` })
+          .where(eq(productVariants.id, line.variantId));
+      }
+
+      await tx.insert(inventoryLogs).values({
+        productId: line.productId,
+        changeAmount: line.quantity,
+        reason: "return",
+        note: `Restock from cancelled order ${orderNumber}`,
+      });
+    }
+  });
+}
+
+/** Order-number lookup for guest tracking; the caller verifies the phone. */
+export async function getOrderByNumber(orderNumber: string) {
+  const database = getDb();
+  const [order] = await database
+    .select()
+    .from(orders)
+    .where(eq(orders.orderNumber, orderNumber))
+    .limit(1);
+  if (!order) return null;
+
+  const items = await database
+    .select()
+    .from(orderItems)
+    .where(eq(orderItems.orderId, order.id))
     .orderBy(asc(orderItems.displayOrder), asc(orderItems.id));
 
   return { ...order, items };

@@ -1,6 +1,12 @@
 import { checkRateLimit } from "@/lib/rate-limit";
 import { appError } from "../app-error";
-import { insertReview, listApprovedReviewsForProduct, getRatingSummary } from "./reviews.db";
+import {
+  getRatingSummary,
+  hasPurchasedProduct,
+  hasReviewedProduct,
+  insertReview,
+  listApprovedReviewsForProduct,
+} from "./reviews.db";
 
 const REVIEW_RATE_LIMIT = 5;
 const REVIEW_RATE_WINDOW_MS = 60 * 60 * 1000;
@@ -21,6 +27,18 @@ export async function submitReview(record: {
     throw appError("TOO_MANY_REQUESTS", "reviewRateLimited");
   }
 
+  // Only a signed-in reviewer can be checked against order history at all; a
+  // guest has no identity to match, so their review is never marked verified
+  let isVerifiedPurchase = false;
+  if (record.userId) {
+    const [alreadyReviewed, purchased] = await Promise.all([
+      hasReviewedProduct(record.userId, record.productId),
+      hasPurchasedProduct(record.userId, record.productId),
+    ]);
+    if (alreadyReviewed) throw appError("CONFLICT", "duplicateReview");
+    isVerifiedPurchase = purchased;
+  }
+
   // Reviews enter moderation as pending; nothing renders until approved
   return insertReview({
     productId: record.productId,
@@ -31,6 +49,9 @@ export async function submitReview(record: {
     authorName: record.accountName ?? record.authorName,
     title: record.title ?? null,
     body: record.body ?? null,
+    // Stored, not derived, so the badge cannot change if the order is later
+    // cancelled or the account is deleted
+    isVerifiedPurchase,
     status: "pending",
   });
 }

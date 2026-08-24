@@ -1456,3 +1456,155 @@ Both were flagged in the plan and resolved in favour of the recommended option:
 - **#105 (PostHog)** — `trackEvent` is still called from nowhere. Instrumenting it means choosing which events matter, which is a product question.
 
 Each of these is a scope decision, not an oversight — they are the items where the honest fix is larger than the finding.
+
+---
+
+# Post-implementation review (round 2)
+
+**Date:** 2026-08-25 · **Verified:** `tsc --noEmit` clean · `eslint --max-warnings=0` clean · `vitest run` 41/41 · `next build` succeeds.
+
+A review pass over the remediation itself found eight defects and three missing
+features. All are fixed. The three that mattered most are recorded in full,
+because each says something about how the first pass went wrong.
+
+## #121 — The phone normalizer was wrong for the only market this store serves
+
+`normalizePhoneNumber` dropped the domestic trunk zero without adding the
+country code, so `01012345678` became `+1012345678` instead of `+201012345678`.
+`phonePattern` accepts a leading digit, so the domestic form — the way an
+Egyptian customer actually types their own number — reached it.
+
+Three consequences, in ascending order of seriousness:
+
+1. One person still produced two customer rows, which is precisely what the
+   normalizer was introduced to prevent.
+2. **The ban check was evadable.** `isCustomerBannedByPhone` keys on the
+   canonical value, so a customer banned as `+20101…` returned as `+1101…`
+   simply by typing their number the local way.
+3. `scripts/normalize-customer-phones.ts` could not do its job: the `+20…` /
+   `010…` pair it exists to merge normalized to two different keys.
+
+**Why the test suite did not catch it.** `normalize-phone.test.ts` asserted that
+`normalizePhoneNumber("01234567890")` equals `"+1234567890"` — the wrong answer,
+under a name ("drops a domestic trunk zero") that described half of a correct
+transform. 36/36 green gave false assurance about the one function whose entire
+purpose is correctness. **A test written from the implementation instead of from
+the requirement is worse than no test**, because it converts a bug into a
+guarantee. The fix was written test-first: the corrected expectations were
+committed and observed failing before the implementation was touched.
+
+Now handles all four real input shapes — `+20…`, `0020…`, `010…`, bare
+`1012345678` — plus a country code typed without a plus, length-checked so a
+national number beginning `20` is not mistaken for one.
+
+## #122 — Variant stock was validated and never decremented
+
+Batch G added aggregate variant stock validation, but `placeOrderAtomic` only
+ever touched `products.stockQuantity`. Grepping every write confirmed
+`productVariants.stockQuantity` was written **only** by the admin product
+editor — never on sale, never on cancellation. A variant with two units in stock
+sold indefinitely.
+
+This was arguably made worse by the first pass rather than better: adding the
+check made variant stock *look* enforced. **A validation without the
+corresponding write is not a half-fix, it is a disguised bug.**
+
+`order_items` gained a `variantId` column to make it fixable at all — the
+existing `variantLabel` is a display snapshot and cannot be resolved back to a
+row, so cancellation had no way to know which variant to credit.
+
+## #123 — The stock message that mattered most was the one left untranslated
+
+`orders.db.ts` threw a raw `Error` for insufficient stock and `inventory.db.ts`
+threw one for a rejected adjustment. These are the **race-loss** paths: the
+pre-check passed and the guarded `UPDATE` lost. tRPC rewrites both to
+"Internal server error", so the customer saw a generic toast and Sentry received
+them as unexpected exceptions.
+
+The tell was that `stockBelowZero` already existed in both dictionaries and was
+called from nowhere — the translation had been added and the throw never wired.
+
+The failure branch now re-reads current stock (only on this rare path) so the
+count in "Only N left" is true rather than a guess.
+
+## #124 — Untyped error keys are what let #123 and its siblings hide
+
+`appError(code, key, params)` typed `key` as a bare `string`. `DeepDictionary`
+guarantees the two locales agree **with each other**; it cannot tell whether a
+thrown key exists at all, and an unknown key degrades silently to
+`errors.generic` with no compile error.
+
+`AppErrorKey = keyof Dictionary["errors"]` (a type-only import, so no dictionary
+data reaches the server bundle) turns every such miss into a build failure. It
+immediately caught `customerNotFound`, which did not exist yet.
+
+Diffing keys in use against the dictionary found what the type would have
+prevented:
+
+- **Six routers still threw English prose** — "Order not found",
+  "Product not found" ×2, "Category not found", "Banner not found",
+  "Customer not found". Batch D converted the services and missed the routers.
+- **`inventory.validators.ts`** still carried a prose message for a non-zero
+  adjustment, which rendered as "Something went wrong".
+
+## #125–#128 — Correctness and operational
+
+| # | Issue | Fix |
+|---|---|---|
+| **#125** | `cancelAndRestock` ran N independent `adjustStock` transactions then a separate status write. A mid-way failure left an order partly restocked but still not cancelled — and retrying restocked those lines again. | `cancelOrderAndRestock` does stock, variant stock, ledger and status flip in one transaction. `changeOrderStatus` now routes `cancelled` to it, so no caller can strand reserved units. |
+| **#126** | `sitemap.ts` paged at `MAX_PAGE_SIZE`, silently capping the sitemap at 48 products. | `listPublishedProductSlugs()` — unpaginated, and narrow (slug + `updatedAt`) so it stays cheap. |
+| **#127** | The upload size gate defaulted a missing `Content-Length` to `0`, so a chunked body passed the pre-check and `formData()` buffered it unbounded. | Missing or non-positive length is now `411 Length Required`. |
+| **#128** | `rate-limit.ts` never removed buckets — one entry per distinct IP for the life of the process. | Expired entries are swept on write past a threshold. No timer, which would keep a serverless instance alive. |
+
+Also: a `freeShippingThreshold` of zero made **every** order ship free, the exact
+opposite of an admin clearing the field to switch free shipping off. Zero now
+reads as disabled. `Pagination`'s `aria-label` was hardcoded English, against
+this project's own bilingual rule. `placeOrderAtomic`'s doc comment claimed the
+customer upsert was inside its transaction; it never was, and now says so.
+
+## Missing features, now built
+
+- **#129 — Guest orders were unretrievable.** Checkout is open to guests, but
+  the confirmation lived in component state (a refresh lost it), `getById` is
+  admin-only, `getMine` needs an account, and the confirmation email is still a
+  logging stub. A guest ended up with nothing. `/orders/lookup` takes the order
+  number plus the phone used at checkout, rate limited because order numbers are
+  short. "No such order" and "wrong phone" return one message — distinguishing
+  them would confirm an order number exists. The confirmation screen now links
+  to it and tells the customer to keep the number.
+- **#130 — Reviews had no purchase verification.** Anyone could review any
+  product, with no duplicate guard. Reviews now carry `isVerifiedPurchase`
+  (stored, not derived, so the badge cannot change if the order is later
+  cancelled), and one account may review a product once — enforced by a partial
+  unique index, with the race caught as a unique violation and surfaced as a
+  real message. Guests can still review; they simply never get the badge.
+
+## Deployment: `db:migrate` needed a baseline first
+
+The schema had been built with `db:push`, so migration `0000` is a full
+baseline — 17 `CREATE TABLE`s, no `IF NOT EXISTS` — against a database that
+already has every table. `drizzle-kit migrate` would have aborted on the first
+statement. The previous section recommended running migrations without checking
+this.
+
+`npm run db:baseline` records `0000` as applied without executing it (drizzle
+hashes the whole file with SHA-256 into its `__drizzle_migrations` table), so
+`0001` onward runs normally. Dry-run by default, `--apply` to write.
+
+**Before running `0001`,** check for reviews that violate the new one-per-account
+rule; the unique index will refuse to build otherwise:
+
+```sql
+select "productId", "userId", count(*)
+from reviews where "userId" is not null
+group by 1, 2 having count(*) > 1;
+```
+
+Rows returned are a decision for the store owner — the migration deliberately
+does not delete customer content on its own.
+
+## Still deliberately not done
+
+Unchanged from the previous section: **#66** (money as `numeric` to `number`),
+**#27** (dictionary split), **#26** (server-rendered product pages), **#23**
+(real rate limiting needs Upstash) and **#105** (PostHog instrumentation).

@@ -32,6 +32,19 @@ export const checkoutItemInputSchema = z.object({
   variantId: z.uuid().optional(),
 });
 
+/**
+ * Guest order tracking. The phone number is the shared secret: an order number
+ * alone must never reveal a customer's address, so both are required.
+ */
+export const orderLookupInputSchema = z.object({
+  orderNumber: z.string().trim().min(6, { message: "tooShort:6" }).max(40, { message: "tooLong:40" }),
+  phoneNumber: z
+    .string()
+    .trim()
+    .regex(phonePattern, { message: "invalidPhone" })
+    .refine(isPlausiblePhoneNumber, { message: "invalidPhone" }),
+});
+
 export const createOrderInputSchema = z.object({
   fullName: z.string().trim().min(2, { message: "tooShort:2" }).max(120, { message: "tooLong:120" }),
   phoneNumber: z

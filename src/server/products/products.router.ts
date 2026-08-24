@@ -1,6 +1,6 @@
 import { publicProcedure, adminProcedure, requireRoles, router } from "../trpc";
+import { appError } from "../app-error";
 import { DESTRUCTIVE_ROLES } from "@/lib/constants";
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   productCreateInputSchema,
@@ -33,7 +33,7 @@ export const productsRouter = router({
   getBySlug: publicProcedure.input(productSlugInputSchema).query(async ({ input }) => {
     const product = await getPublishedProductBySlug(input.slug);
     if (!product) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Product not found" });
+      throw appError("NOT_FOUND", "productNotFound");
     }
     return product;
   }),
@@ -52,7 +52,7 @@ export const productsRouter = router({
   getById: adminProcedure.input(productIdInputSchema).query(async ({ input }) => {
     const record = await getProductById(input.id);
     if (!record) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Product not found" });
+      throw appError("NOT_FOUND", "productNotFound");
     }
     return record;
   }),
