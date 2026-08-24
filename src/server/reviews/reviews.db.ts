@@ -1,0 +1,110 @@
+import { and, desc, eq, gte, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { getDb } from "@/db";
+import { products, reviews } from "@/db/schema";
+
+export async function listApprovedReviewsForProduct(
+  productId: string,
+  page: number,
+  pageSize: number,
+) {
+  const database = getDb();
+  const where = and(eq(reviews.productId, productId), eq(reviews.status, "approved"));
+
+  const items = await database
+    .select({
+      id: reviews.id,
+      authorName: reviews.authorName,
+      rating: reviews.rating,
+      title: reviews.title,
+      body: reviews.body,
+      createdAt: reviews.createdAt,
+    })
+    .from(reviews)
+    .where(where)
+    .orderBy(desc(reviews.createdAt))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  const [{ count }] = await database
+    .select({ count: sql<number>`count(*)::int` })
+    .from(reviews)
+    .where(where);
+
+  return { items, total: count };
+}
+
+export async function getRatingSummary(productId: string) {
+  const [summary] = await getDb()
+    .select({
+      average: sql<number | null>`round(avg(${reviews.rating})::numeric, 2)`,
+      total: sql<number>`count(*)::int`,
+    })
+    .from(reviews)
+    .where(and(eq(reviews.productId, productId), eq(reviews.status, "approved")));
+
+  return { average: summary.average ?? null, total: summary.total };
+}
+
+export async function insertReview(values: typeof reviews.$inferInsert) {
+  const [created] = await getDb().insert(reviews).values(values).returning({ id: reviews.id });
+  return created;
+}
+
+export async function listReviewsForAdmin(filters: {
+  status?: "pending" | "approved" | "rejected";
+  productId?: string;
+  minRating?: number;
+  page: number;
+  pageSize: number;
+}) {
+  const database = getDb();
+  const conditions: (SQL | undefined)[] = [];
+  if (filters.status) conditions.push(eq(reviews.status, filters.status));
+  if (filters.productId) conditions.push(eq(reviews.productId, filters.productId));
+  if (filters.minRating) conditions.push(gte(reviews.rating, filters.minRating));
+  const where = conditions.length ? and(...conditions) : undefined;
+
+  const items = await database
+    .select({
+      id: reviews.id,
+      authorName: reviews.authorName,
+      rating: reviews.rating,
+      title: reviews.title,
+      body: reviews.body,
+      status: reviews.status,
+      isFlagged: reviews.isFlagged,
+      createdAt: reviews.createdAt,
+      productNameEn: products.nameEn,
+      productNameAr: products.nameAr,
+      productSlug: products.slug,
+    })
+    .from(reviews)
+    .innerJoin(products, eq(reviews.productId, products.id))
+    .where(where)
+    .orderBy(desc(reviews.isFlagged), desc(reviews.createdAt))
+    .limit(filters.pageSize)
+    .offset((filters.page - 1) * filters.pageSize);
+
+  const [{ count }] = await database
+    .select({ count: sql<number>`count(*)::int` })
+    .from(reviews)
+    .where(where);
+
+  return { items, total: count };
+}
+
+export async function setReviewStatus(
+  id: string,
+  status: "approved" | "rejected",
+): Promise<void> {
+  await getDb().update(reviews).set({ status }).where(eq(reviews.id, id));
+}
+
+export async function setReviewFlagged(id: string, isFlagged: boolean): Promise<void> {
+  await getDb().update(reviews).set({ isFlagged }).where(eq(reviews.id, id));
+}
+
+export async function deleteReview(id: string): Promise<void> {
+  await getDb().delete(reviews).where(eq(reviews.id, id));
+}
