@@ -370,6 +370,24 @@ export async function getProductsByIds(ids: string[]) {
     .where(inArray(products.id, ids));
 }
 
+/** Variant rows for checkout price derivation — validates ownership upstream. */
+export async function getVariantsByIds(ids: string[]) {
+  const database = getDb();
+  if (!ids.length) return [];
+  return database
+    .select({
+      id: productVariants.id,
+      productId: productVariants.productId,
+      size: productVariants.size,
+      color: productVariants.color,
+      material: productVariants.material,
+      priceDelta: productVariants.priceDelta,
+      stockQuantity: productVariants.stockQuantity,
+    })
+    .from(productVariants)
+    .where(inArray(productVariants.id, ids));
+}
+
 export async function listLowStockProducts(threshold: number, limit = 10) {
   const database = getDb();
   return database

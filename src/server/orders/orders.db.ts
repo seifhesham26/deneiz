@@ -27,6 +27,7 @@ export interface CheckoutOrderRecord {
     productNameEn: string;
     productNameAr: string;
     imageUrl: string | null;
+    variantLabel: string | null;
     unitPrice: number;
     quantity: number;
     lineTotal: number;
@@ -92,6 +93,7 @@ export async function placeOrderAtomic(
         productNameEn: item.productNameEn,
         productNameAr: item.productNameAr,
         imageUrl: item.imageUrl,
+        variantLabel: item.variantLabel,
         unitPrice: item.unitPrice,
         quantity: item.quantity,
         lineTotal: item.lineTotal,

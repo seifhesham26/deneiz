@@ -10,7 +10,7 @@ export function ProductDetailLoader({ slug }: { slug: string }) {
 
   if (isLoading) {
     return (
-      <div className="content-shell section-shell grid gap-8 lg:grid-cols-2">
+      <div className="content-shell section-y grid gap-8 lg:grid-cols-2">
         <Skeleton className="aspect-square w-full" />
         <div className="flex flex-col gap-4">
           <Skeleton className="h-8 w-3/4" />

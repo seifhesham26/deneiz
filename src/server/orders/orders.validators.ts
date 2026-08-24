@@ -24,6 +24,8 @@ const optionalText = (max: number) =>
 export const checkoutItemInputSchema = z.object({
   productId: z.uuid(),
   quantity: z.coerce.number().int().positive().max(99),
+  variantId: z.uuid().optional(),
+  variantLabel: z.string().trim().max(120).optional(),
 });
 
 export const createOrderInputSchema = z.object({

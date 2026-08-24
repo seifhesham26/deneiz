@@ -1,4 +1,8 @@
+import { config } from "dotenv";
 import { defineConfig } from "drizzle-kit";
+
+// drizzle-kit does not auto-load Next.js env files
+config({ path: ".env.local" });
 
 export default defineConfig({
   dialect: "postgresql",

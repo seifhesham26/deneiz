@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
 import { formatCurrency } from "@/utils/format-currency";
-import { useCartStore, type CartItem } from "@/store/cart.store";
+import { useCartStore, cartLineKey, type CartItem } from "@/store/cart.store";
 
 interface CartItemRowProps {
   item: CartItem;
@@ -15,6 +15,7 @@ export function CartItemRow({ item }: CartItemRowProps) {
   const { locale, t } = useLang();
   const setQuantity = useCartStore((state) => state.setQuantity);
   const removeItem = useCartStore((state) => state.removeItem);
+  const key = cartLineKey(item);
 
   return (
     <li className="flex gap-4 py-4">
@@ -35,12 +36,16 @@ export function CartItemRow({ item }: CartItemRowProps) {
           <button
             type="button"
             aria-label={t.common.remove}
-            onClick={() => removeItem(item.productId)}
+            onClick={() => removeItem(key)}
             className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-text-muted hover:text-danger"
           >
             <Trash2 aria-hidden className="size-4" />
           </button>
         </div>
+
+        {item.variantLabel ? (
+          <span className="text-xs text-text-muted">{item.variantLabel}</span>
+        ) : null}
 
         <span className="text-sm text-text-secondary">{formatCurrency(item.unitPrice, locale)}</span>
 
@@ -49,7 +54,7 @@ export function CartItemRow({ item }: CartItemRowProps) {
             <button
               type="button"
               aria-label="decrease"
-              onClick={() => setQuantity(item.productId, item.quantity - 1)}
+              onClick={() => setQuantity(key, item.quantity - 1)}
               className="flex min-h-11 min-w-11 items-center justify-center"
             >
               <Minus aria-hidden className="size-4" />
@@ -58,7 +63,7 @@ export function CartItemRow({ item }: CartItemRowProps) {
             <button
               type="button"
               aria-label="increase"
-              onClick={() => setQuantity(item.productId, item.quantity + 1)}
+              onClick={() => setQuantity(key, item.quantity + 1)}
               className="flex min-h-11 min-w-11 items-center justify-center"
             >
               <Plus aria-hidden className="size-4" />

@@ -12,13 +12,22 @@ export interface CartItem {
   unitPrice: number;
   imageUrl: string | null;
   quantity: number;
+  /** Present when the product has selectable variants */
+  variantId?: string;
+  /** Human label like "Size M · Gold" shown in cart lines */
+  variantLabel?: string;
+}
+
+/** Lines are unique per product+variant combination. */
+export function cartLineKey(item: Pick<CartItem, "productId" | "variantId">): string {
+  return `${item.productId}::${item.variantId ?? ""}`;
 }
 
 interface CartState {
   items: CartItem[];
   addItem: (item: Omit<CartItem, "quantity">, quantity: number) => void;
-  removeItem: (productId: string) => void;
-  setQuantity: (productId: string, quantity: number) => void;
+  removeItem: (key: string) => void;
+  setQuantity: (key: string, quantity: number) => void;
   clearCart: () => void;
 }
 
@@ -31,13 +40,16 @@ export const useCartStore = create<CartState>()(
 
       addItem: (item, quantity) =>
         set((state) => {
-          const existing = state.items.find((line) => line.productId === item.productId);
-          if (!existing) {
+          const key = cartLineKey(item);
+          const existingIndex = state.items.findIndex((line) => cartLineKey(line) === key);
+
+          if (existingIndex === -1) {
             return { items: [...state.items, { ...item, quantity }] };
           }
+
           return {
-            items: state.items.map((line) =>
-              line.productId === item.productId
+            items: state.items.map((line, index) =>
+              index === existingIndex
                 ? {
                     ...line,
                     quantity: Math.min(line.quantity + quantity, MAX_QUANTITY_PER_LINE),
@@ -47,16 +59,16 @@ export const useCartStore = create<CartState>()(
           };
         }),
 
-      removeItem: (productId) =>
+      removeItem: (key) =>
         set((state) => ({
-          items: state.items.filter((line) => line.productId !== productId),
+          items: state.items.filter((line) => cartLineKey(line) !== key),
         })),
 
-      setQuantity: (productId, quantity) =>
+      setQuantity: (key, quantity) =>
         set((state) => ({
           items: state.items
             .map((line) =>
-              line.productId === productId
+              cartLineKey(line) === key
                 ? {
                     ...line,
                     // Zero drops the line entirely — matches cart UX expectations

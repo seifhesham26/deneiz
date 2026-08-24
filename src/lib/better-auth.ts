@@ -17,13 +17,14 @@ function createAuth() {
     // Trailing slashes make Better Auth build URLs like /api/auth with "//"
     baseURL: env.betterAuthUrl.replace(/\/+$/, ""),
     plugins: [
-      nextCookies(),
       dash({
         apiKey: env.betterAuthApiKey,
         // Activity tracking writes lastActiveAt on the user — keep it off
         // until that column exists in the schema
         activityTracking: { enabled: false },
       }),
+      // Cookie integration must stay last or Set-Cookie headers get dropped
+      nextCookies(),
     ],
     user: {
       additionalFields: {

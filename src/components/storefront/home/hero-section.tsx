@@ -28,7 +28,7 @@ export function HeroSection() {
       ) : null}
       <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
 
-      <div className="content-shell section-shell w-full">
+      <div className="content-shell flex w-full flex-1 items-center py-24">
         <motion.div
           className="flex max-w-2xl flex-col gap-5"
           initial={{ opacity: 0, y: 24 }}

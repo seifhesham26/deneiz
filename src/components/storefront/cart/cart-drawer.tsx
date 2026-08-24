@@ -6,7 +6,7 @@ import { Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useLang } from "@/components/providers/lang-provider";
 import { Button } from "@/components/ui/button";
-import { useCartStore } from "@/store/cart.store";
+import { useCartStore, cartLineKey } from "@/store/cart.store";
 import { useUiStore } from "@/store/ui.store";
 import { useIsHydrated } from "@/hooks/shared/useIsHydrated";
 
@@ -68,8 +68,10 @@ export function CartDrawer() {
             ) : (
               <>
                 <ul className="flex-1 divide-y divide-border overflow-y-auto">
-                  {items.map((line) => (
-                    <li key={line.productId} className="flex gap-3 p-4">
+                  {items.map((line) => {
+                    const key = cartLineKey(line);
+                    return (
+                      <li key={key} className="flex gap-3 p-4">
                       <Link
                         href={`/products/${line.slug}`}
                         onClick={closeCartDrawer}
@@ -84,6 +86,9 @@ export function CartDrawer() {
                         <span className="truncate text-sm font-medium">
                           {locale === "ar" ? line.nameAr : line.nameEn}
                         </span>
+                        {line.variantLabel ? (
+                          <span className="text-xs text-text-muted">{line.variantLabel}</span>
+                        ) : null}
                         <span className="text-sm">{line.unitPrice.toLocaleString(locale)}</span>
 
                         <div className="mt-auto flex items-center justify-between">
@@ -91,7 +96,7 @@ export function CartDrawer() {
                             <button
                               type="button"
                               aria-label="decrease"
-                              onClick={() => setQuantity(line.productId, line.quantity - 1)}
+                              onClick={() => setQuantity(key, line.quantity - 1)}
                               className="flex min-h-9 min-w-9 items-center justify-center rounded-full hover:bg-surface"
                             >
                               <Minus aria-hidden className="size-4" />
@@ -100,7 +105,7 @@ export function CartDrawer() {
                             <button
                               type="button"
                               aria-label="increase"
-                              onClick={() => setQuantity(line.productId, line.quantity + 1)}
+                              onClick={() => setQuantity(key, line.quantity + 1)}
                               className="flex min-h-9 min-w-9 items-center justify-center rounded-full hover:bg-surface"
                             >
                               <Plus aria-hidden className="size-4" />
@@ -110,7 +115,7 @@ export function CartDrawer() {
                           <button
                             type="button"
                             aria-label={t.common.remove}
-                            onClick={() => removeItem(line.productId)}
+                            onClick={() => removeItem(key)}
                             className="flex min-h-9 min-w-9 items-center justify-center rounded-full text-text-muted hover:text-danger"
                           >
                             <Trash2 aria-hidden className="size-4" />
@@ -118,7 +123,8 @@ export function CartDrawer() {
                         </div>
                       </div>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
 
                 <div className="border-t border-border p-4">

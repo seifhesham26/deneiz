@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Cairo, Poppins } from "next/font/google";
 import { cookies } from "next/headers";
 import { AppProviders } from "@/components/providers/app-providers";
+import { ThemeScript } from "@/components/layout/storefront/theme-script";
 import { DEFAULT_LOCALE, LOCALE_COOKIE } from "@/lib/constants";
 import { SUPPORTED_LOCALES, type Locale } from "@/types/shared";
 import "./globals.css";
@@ -44,6 +45,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className={`${poppins.variable} ${cairo.variable} h-full antialiased`}
     >
       <body className="flex min-h-dvh flex-col">
+        <ThemeScript />
         <AppProviders initialLocale={locale}>{children}</AppProviders>
       </body>
     </html>

@@ -52,7 +52,12 @@ export function CheckoutForm() {
       {
         ...values,
         locale,
-        items: items.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+        items: items.map((line) => ({
+          productId: line.productId,
+          quantity: line.quantity,
+          variantId: line.variantId,
+          variantLabel: line.variantLabel,
+        })),
       },
       {
         onSuccess: (order) => {

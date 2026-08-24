@@ -3,7 +3,7 @@ import { sendOrderConfirmationEmail } from "@/lib/resend";
 import { adjustStock } from "../inventory/inventory.db";
 import { getSettings } from "@/server/settings/settings.db";
 import { upsertCustomerByPhone, isCustomerBannedByPhone } from "../customers/customers.db";
-import { getProductsByIds } from "../products/products.db";
+import { getProductsByIds, getVariantsByIds } from "../products/products.db";
 import {
   listOrdersForAdmin,
   listOrdersForUser,
@@ -39,22 +39,46 @@ export async function placeOrder(input: CreateOrderInput, userId: string | null)
   const productRows = await getProductsByIds(input.items.map((item) => item.productId));
   const productMap = new Map(productRows.map((row) => [row.id, row]));
 
+  const variantRows = await getVariantsByIds(
+    input.items.filter((item) => item.variantId).map((item) => item.variantId!),
+  );
+  const variantMap = new Map(variantRows.map((row) => [row.id, row]));
+
   let subtotal = 0;
   const items = input.items.map((item) => {
     const product = productMap.get(item.productId);
     if (!product) throw new Error("A product in your cart no longer exists");
     if (product.status !== "published") throw new Error(`"${product.nameEn}" is not available`);
+
+    // A claimed variant must belong to this product — otherwise ignore it
+    const variant = item.variantId ? variantMap.get(item.variantId) : undefined;
+    const validVariant =
+      variant && variant.productId === product.id
+        ? variant
+        : undefined;
+
+    // PROTOTYPE: stock is enforced per product; per-variant stock enforcement lands with the warehouse pick-list work
     if (product.stockQuantity < item.quantity) {
       throw new Error(`Only ${product.stockQuantity} left of "${product.nameEn}"`);
     }
-    const lineTotal = Math.round(product.price * item.quantity * 100) / 100;
+
+    const unitPrice = Math.round(
+      (product.price + (validVariant?.priceDelta ?? 0)) * 100,
+    ) / 100;
+    const lineTotal = Math.round(unitPrice * item.quantity * 100) / 100;
     subtotal += lineTotal;
+
+    const labelParts = [validVariant?.size, validVariant?.color, validVariant?.material]
+      .filter(Boolean)
+      .join(" · ");
+
     return {
       productId: product.id,
       productNameEn: product.nameEn,
       productNameAr: product.nameAr,
       imageUrl: null as string | null,
-      unitPrice: product.price,
+      variantLabel: labelParts.length > 0 ? labelParts : null,
+      unitPrice,
       quantity: item.quantity,
       lineTotal,
     };

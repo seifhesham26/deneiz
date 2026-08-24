@@ -81,12 +81,12 @@ export default function AccountPage() {
   }
 
   if (isLoading) {
-    return <div className="content-shell section-shell" aria-busy="true" />;
+    return <div className="content-shell section-y" aria-busy="true" />;
   }
 
   if (!user) {
     return (
-      <div className="content-shell section-shell flex justify-center">
+      <div className="content-shell section-y flex justify-center">
         <form
           onSubmit={handleAuthSubmit}
           className="flex w-full max-w-md flex-col gap-4 rounded-2xl border border-border bg-surface-raised p-6"
@@ -142,7 +142,7 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="content-shell section-shell flex flex-col gap-8">
+    <div className="content-shell section-y flex flex-col gap-8">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-semibold">{t.account.welcome(user.name)}</h1>

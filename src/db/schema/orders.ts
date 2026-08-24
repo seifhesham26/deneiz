@@ -68,6 +68,8 @@ export const orderItems = pgTable("order_items", {
   }),
   productNameEn: text("productNameEn").notNull(),
   productNameAr: text("productNameAr").notNull(),
+  /** Snapshot like "Size M · Gold" — survives variant deletion */
+  variantLabel: text("variantLabel"),
   imageUrl: text("imageUrl"),
   unitPrice: money("unitPrice").notNull(),
   quantity: integer("quantity").notNull(),

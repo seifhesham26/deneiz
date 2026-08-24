@@ -14,7 +14,7 @@ export default function CartPage() {
   const isHydrated = useIsHydrated();
 
   if (!isHydrated) {
-    return <div className="content-shell section-shell" aria-busy="true" />;
+    return <div className="content-shell section-y" aria-busy="true" />;
   }
 
   const subtotal =
@@ -23,7 +23,7 @@ export default function CartPage() {
     subtotal === 0 || subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
 
   return (
-    <div className="content-shell section-shell">
+    <div className="content-shell section-y">
       <h1 className="mb-8 text-4xl font-semibold">{t.cart.title}</h1>
 
       {items.length === 0 ? (
