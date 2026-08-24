@@ -1,5 +1,6 @@
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { containsPattern } from "@/utils/escape-like";
 import { getDb } from "@/db";
 import { inventoryLogs, products, users } from "@/db/schema";
 
@@ -52,12 +53,13 @@ export async function listStockLevels(filters: {
   const conditions: (SQL | undefined)[] = [];
   if (filters.search) {
     conditions.push(
-      or(ilike(products.nameEn, `%${filters.search}%`), ilike(products.nameAr, `%${filters.search}%`)),
+      or(ilike(products.nameEn, containsPattern(filters.search)), ilike(products.nameAr, containsPattern(filters.search))),
     );
   }
   const where = conditions.length ? and(...conditions) : undefined;
 
-  const items = await database
+  const [items, [{ count }], [{ lowStockCount }]] = await Promise.all([
+    database
     .select({
       id: products.id,
       slug: products.slug,
@@ -69,19 +71,20 @@ export async function listStockLevels(filters: {
     })
     .from(products)
     .where(where)
-    .orderBy(sql`${products.stockQuantity} asc`)
+    .orderBy(asc(products.stockQuantity), asc(products.id))
     .limit(filters.pageSize)
-    .offset((filters.page - 1) * filters.pageSize);
-
-  const [{ count }] = await database
+    .offset((filters.page - 1) * filters.pageSize),
+    database
     .select({ count: sql<number>`count(*)::int` })
     .from(products)
-    .where(where);
-
-  const [{ lowStockCount }] = await database
+    .where(where),
+    database
     .select({ lowStockCount: sql<number>`count(*)::int` })
     .from(products)
-    .where(sql`${products.stockQuantity} <= ${filters.threshold}`);
+    // Same `where` as the rows above: a low-stock count that ignored the active
+    // search would contradict the table it sits beside
+    .where(and(where, sql`${products.stockQuantity} <= ${filters.threshold}`)),
+  ]);
 
   return { items, total: count, lowStockCount };
 }
@@ -102,15 +105,7 @@ export async function listStockHistory(productId: string, limit: number) {
     .innerJoin(products, eq(inventoryLogs.productId, products.id))
     .leftJoin(users, eq(inventoryLogs.createdByUserId, users.id))
     .where(eq(inventoryLogs.productId, productId))
-    .orderBy(desc(inventoryLogs.createdAt))
+    .orderBy(desc(inventoryLogs.createdAt), desc(inventoryLogs.id))
     .limit(limit);
 }
 
-export async function getProductStock(productId: string): Promise<number | null> {
-  const [row] = await getDb()
-    .select({ stockQuantity: products.stockQuantity })
-    .from(products)
-    .where(eq(products.id, productId))
-    .limit(1);
-  return row?.stockQuantity ?? null;
-}

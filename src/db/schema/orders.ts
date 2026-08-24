@@ -1,4 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
+  index,
   integer,
   numeric,
   pgEnum,
@@ -54,11 +57,21 @@ export const orders = pgTable("orders", {
     .notNull()
     .default("ar"),
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
-});
+  updatedAt: timestamp("updatedAt", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => [
+  index("orders_userId_idx").on(table.userId),
+  index("orders_customerId_idx").on(table.customerId),
+  index("orders_createdAt_idx").on(table.createdAt),
+]);
 
 export const orderItems = pgTable("order_items", {
   id: uuid("id").defaultRandom().primaryKey(),
+  /** Preserves the order the customer built their cart in — the primary key is
+   *  a random UUID and sorts meaninglessly. */
+  displayOrder: integer("displayOrder").notNull().default(0),
   orderId: uuid("orderId")
     .notNull()
     .references(() => orders.id, { onDelete: "cascade" }),
@@ -74,4 +87,7 @@ export const orderItems = pgTable("order_items", {
   unitPrice: money("unitPrice").notNull(),
   quantity: integer("quantity").notNull(),
   lineTotal: money("lineTotal").notNull(),
-});
+}, (table) => [
+  index("order_items_orderId_idx").on(table.orderId),
+  check("order_items_quantity_positive", sql`${table.quantity} > 0`),
+]);

@@ -29,7 +29,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         aria-invalid={Boolean(error)}
         className={cn(
           "w-full rounded-lg border border-border bg-surface-raised p-3 text-sm text-text-primary",
-          "placeholder:text-text-muted focus:border-accent focus:outline-none",
+          "placeholder:text-text-muted focus:border-accent",
           error && "border-danger",
           className,
         )}

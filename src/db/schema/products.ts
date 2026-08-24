@@ -1,5 +1,8 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
+  index,
   integer,
   numeric,
   pgEnum,
@@ -38,8 +41,14 @@ export const products = pgTable("products", {
   isFeatured: boolean("isFeatured").notNull().default(false),
   stockQuantity: integer("stockQuantity").notNull().default(0),
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
-});
+  updatedAt: timestamp("updatedAt", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => [
+  index("products_categoryId_idx").on(table.categoryId),
+  check("products_stock_non_negative", sql`${table.stockQuantity} >= 0`),
+]);
 
 export const productImages = pgTable("product_images", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -50,7 +59,7 @@ export const productImages = pgTable("product_images", {
   altText: text("altText"),
   displayOrder: integer("displayOrder").notNull().default(0),
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [index("product_images_productId_idx").on(table.productId)]);
 
 export const productVariants = pgTable("product_variants", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -64,4 +73,7 @@ export const productVariants = pgTable("product_variants", {
   priceDelta: money("priceDelta").notNull().default(0),
   stockQuantity: integer("stockQuantity").notNull().default(0),
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("product_variants_productId_idx").on(table.productId),
+  check("product_variants_stock_non_negative", sql`${table.stockQuantity} >= 0`),
+]);

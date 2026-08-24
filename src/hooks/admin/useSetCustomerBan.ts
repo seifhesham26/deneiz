@@ -1,13 +1,12 @@
 "use client";
 
 import { trpc } from "@/lib/trpc-client";
-import { useQueryClient } from "@tanstack/react-query";
 
 export function useSetCustomerBan() {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
   return trpc.customers.setBan.useMutation({
     onSuccess: () => {
-      void queryClient.invalidateQueries();
+      void utils.customers.invalidate();
     },
   });
 }

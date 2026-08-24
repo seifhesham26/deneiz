@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { getDb } from "@/db";
 import { categories, products } from "@/db/schema";
@@ -62,11 +62,11 @@ export async function countProductsInCategory(categoryId: string): Promise<numbe
   return count;
 }
 
-export async function searchCategoryByName(term: string) {
-  return getDb()
-    .select()
+/** Depth guard: a category with children may not itself be nested. */
+export async function countChildren(categoryId: string): Promise<number> {
+  const [{ count }] = await getDb()
+    .select({ count: sql<number>`count(*)::int` })
     .from(categories)
-    .where(or(ilike(categories.nameEn, `%${term}%`), ilike(categories.nameAr, `%${term}%`)))
-    .orderBy(asc(categories.displayOrder))
-    .limit(10);
+    .where(eq(categories.parentId, categoryId));
+  return count;
 }

@@ -1,7 +1,8 @@
-import { and, desc, eq, ilike, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, ne, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { containsPattern } from "@/utils/escape-like";
 import { getDb } from "@/db";
-import { customers } from "@/db/schema";
+import { customers, orders } from "@/db/schema";
 
 /** Aggregates exclude cancelled orders — banned customers still show history. */
 const ordersCountSql = sql<number>`(
@@ -14,6 +15,9 @@ const totalSpentSql = sql<number>`(
   where o."customerId" = ${customers.id} and o.status <> 'cancelled'
 )`;
 
+/** Recent-order rows shown on the admin customer profile. */
+const CUSTOMER_RECENT_ORDERS = 20;
+
 export async function listCustomers(filters: {
   search?: string;
   page: number;
@@ -24,15 +28,16 @@ export async function listCustomers(filters: {
   if (filters.search) {
     conditions.push(
       or(
-        ilike(customers.fullName, `%${filters.search}%`),
-        ilike(customers.email, `%${filters.search}%`),
-        ilike(customers.phoneNumber, `%${filters.search}%`),
+        ilike(customers.fullName, containsPattern(filters.search)),
+        ilike(customers.email, containsPattern(filters.search)),
+        ilike(customers.phoneNumber, containsPattern(filters.search)),
       ),
     );
   }
   const where = conditions.length ? and(...conditions) : undefined;
 
-  const items = await database
+  const [items, [{ count }]] = await Promise.all([
+    database
     .select({
       id: customers.id,
       userId: customers.userId,
@@ -47,14 +52,14 @@ export async function listCustomers(filters: {
     })
     .from(customers)
     .where(where)
-    .orderBy(desc(customers.createdAt))
+    .orderBy(desc(customers.createdAt), asc(customers.id))
     .limit(filters.pageSize)
-    .offset((filters.page - 1) * filters.pageSize);
-
-  const [{ count }] = await database
+    .offset((filters.page - 1) * filters.pageSize),
+    database
     .select({ count: sql<number>`count(*)::int` })
     .from(customers)
-    .where(where);
+    .where(where),
+  ]);
 
   return { items, total: count };
 }
@@ -83,16 +88,16 @@ export async function getCustomerDetail(id: string) {
 
   const orderRows = await database
     .select({
-      id: sql<string>`o.id`,
-      orderNumber: sql<string>`o."orderNumber"`,
-      status: sql<string>`o.status`,
-      total: sql<number>`o.total::float8`,
-      createdAt: sql<Date>`o."createdAt"`,
+      id: orders.id,
+      orderNumber: orders.orderNumber,
+      status: orders.status,
+      total: orders.total,
+      createdAt: orders.createdAt,
     })
-    .from(sql`orders o`)
-    .where(sql`o."customerId" = ${id} and o.status <> 'cancelled'`)
-    .orderBy(sql`o."createdAt" desc`)
-    .limit(20);
+    .from(orders)
+    .where(and(eq(orders.customerId, id), ne(orders.status, "cancelled")))
+    .orderBy(desc(orders.createdAt), asc(orders.id))
+    .limit(CUSTOMER_RECENT_ORDERS);
 
   return { ...customer, orders: orderRows };
 }
@@ -106,18 +111,24 @@ export async function setCustomerBan(id: string, isBanned: boolean): Promise<voi
 
 export async function upsertCustomerByPhone(record: {
   fullName: string;
+  /** Must already be normalized — this column is the customer identity key */
   phoneNumber: string;
   city: string | null;
+  email: string | null;
+  userId: string | null;
 }): Promise<typeof customers.$inferSelect> {
   const [customer] = await getDb()
     .insert(customers)
     .values(record)
     .onConflictDoUpdate({
       target: customers.phoneNumber,
+      // Fill blanks only. Anyone can type a stranger's phone number at guest
+      // checkout, so an overwrite here would let them rename that customer.
+      // The order row already snapshots the name used for this purchase.
       set: {
-        // Contact details may change between orders; latest checkout wins
-        fullName: record.fullName,
-        city: record.city ?? undefined,
+        userId: sql`coalesce(${customers.userId}, ${record.userId})`,
+        email: sql`coalesce(${customers.email}, ${record.email})`,
+        city: sql`coalesce(${customers.city}, ${record.city})`,
         updatedAt: new Date(),
       },
     })
@@ -125,14 +136,6 @@ export async function upsertCustomerByPhone(record: {
   return customer;
 }
 
-export async function isCustomerBanned(id: string): Promise<boolean> {
-  const [row] = await getDb()
-    .select({ isBanned: customers.isBanned })
-    .from(customers)
-    .where(and(eq(customers.id, id), ne(customers.isBanned, false)))
-    .limit(1);
-  return Boolean(row);
-}
 
 export async function isCustomerBannedByPhone(phoneNumber: string): Promise<boolean> {
   const [row] = await getDb()

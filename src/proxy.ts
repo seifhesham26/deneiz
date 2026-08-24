@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE_NAME } from "@/lib/constants";
+import { getSessionCookie } from "better-auth/cookies";
 
 /**
  * Network-level gate for /admin/*. There is a single login surface (/account);
@@ -12,7 +12,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/account", request.url));
   }
 
-  const hasSessionCookie = request.cookies.has(SESSION_COOKIE_NAME);
+  // Better Auth prefixes the cookie with __Secure- on HTTPS and in production.
+  // Matching a hardcoded name works on http://localhost and nowhere else, so
+  // this helper — which knows the prefix and both separator forms — is the
+  // only safe way to ask the question.
+  const hasSessionCookie = getSessionCookie(request) !== null;
 
   if (!hasSessionCookie) {
     const accountUrl = new URL("/account", request.url);

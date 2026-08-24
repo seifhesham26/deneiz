@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useLang } from "@/components/providers/lang-provider";
 import { ProductForm } from "@/components/admin/products/product-form";
 import { pushToast } from "@/components/ui/toast";
+import { translateError } from "@/lib/translate-error";
 import { useCreateProduct } from "@/hooks/admin/useCreateProduct";
 import type { ProductFormOutput } from "@/components/admin/products/product-form";
 
@@ -20,7 +21,7 @@ export default function AdminNewProductPage() {
           pushToast(t.admin.productsView.productCreated, "success");
           router.push("/admin/products");
         },
-        onError: (error) => pushToast(error.message || t.errors.generic, "error"),
+        onError: (error) => pushToast(translateError(error, t), "error"),
       },
     );
   }

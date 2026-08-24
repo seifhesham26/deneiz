@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { userRoleEnum } from "@/db/schema";
+
+/** Canonical literals kept here (not from the schema) so this module stays
+ *  dependency-free and importable from client code — same rule as
+ *  products.validators.ts. */
+const USER_ROLES = ["super_admin", "manager", "staff", "customer"] as const;
 
 const optionalText = (max: number) =>
   z.preprocess(
@@ -27,5 +31,5 @@ export const updateSettingsInputSchema = z.object({
 
 export const updateUserRoleInputSchema = z.object({
   userId: z.string().min(1),
-  role: z.enum(userRoleEnum.enumValues),
+  role: z.enum(USER_ROLES),
 });

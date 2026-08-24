@@ -14,8 +14,13 @@ import { CartSummary } from "@/components/storefront/cart/cart-summary";
 import { useCreateOrder } from "@/hooks/storefront/useCreateOrder";
 import { createOrderInputSchema } from "@/server/orders/orders.validators";
 import type { z } from "zod";
-import { DEFAULT_SHIPPING_FEE, FREE_SHIPPING_THRESHOLD } from "@/lib/constants";
 import { useCartStore } from "@/store/cart.store";
+import { useIsHydrated } from "@/hooks/shared/useIsHydrated";
+import { useGetStoreSettings } from "@/hooks/admin/useGetStoreSettings";
+import { useGetSessionUser } from "@/hooks/storefront/useGetSessionUser";
+import { calculateShipping } from "@/utils/calculate-shipping";
+import { formatCurrency } from "@/utils/format-currency";
+import { translateError, translateFieldMessage } from "@/lib/translate-error";
 
 /** Server checkout schema minus items — those come from the cart store. */
 const checkoutFormSchema = createOrderInputSchema.omit({ items: true });
@@ -28,13 +33,18 @@ export function CheckoutForm() {
   const items = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
   const createOrder = useCreateOrder();
+  const isHydrated = useIsHydrated();
+  const storeSettings = useGetStoreSettings();
+  const { user } = useGetSessionUser();
   const [placedOrderNumber, setPlacedOrderNumber] = useState<string | null>(null);
 
   const subtotal =
     Math.round(items.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0) * 100) / 100;
-  const shippingFee =
-    subtotal === 0 || subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
-  const total = Math.round((subtotal + shippingFee) * 100) / 100;
+  // Same function the server charges from — see utils/calculate-shipping.ts
+  const shippingFee = storeSettings.data
+    ? calculateShipping(subtotal, storeSettings.data)
+    : null;
+  const total = shippingFee === null ? null : Math.round((subtotal + shippingFee) * 100) / 100;
 
   const {
     register,
@@ -42,7 +52,7 @@ export function CheckoutForm() {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(checkoutFormSchema),
-    defaultValues: { paymentMethod: "cash_on_delivery" as const },
+    defaultValues: { paymentMethod: "cash_on_delivery" as const, email: user?.email ?? undefined },
   });
 
   function onSubmit(values: CheckoutFormOutput) {
@@ -64,7 +74,7 @@ export function CheckoutForm() {
           clearCart();
           setPlacedOrderNumber(order.orderNumber);
         },
-        onError: (error) => pushToast(error.message || t.errors.generic, "error"),
+        onError: (error) => pushToast(translateError(error, t), "error"),
       },
     );
   }
@@ -88,7 +98,7 @@ export function CheckoutForm() {
     );
   }
 
-  if (items.length === 0 && !createOrder.isPending) {
+  if (isHydrated && items.length === 0 && !createOrder.isPending) {
     return (
       <div className="py-20 text-center text-text-secondary">{t.checkout.emptyCartWarning}</div>
     );
@@ -100,7 +110,7 @@ export function CheckoutForm() {
         <CartSummary
           subtotal={subtotal}
           shippingFee={shippingFee}
-          freeShippingThreshold={FREE_SHIPPING_THRESHOLD}
+          freeShippingThreshold={storeSettings.data?.freeShippingThreshold ?? null}
         />
       </div>
 
@@ -113,16 +123,24 @@ export function CheckoutForm() {
             className="grid gap-4"
             style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))" }}
           >
-            <Input label={t.checkout.fullName} error={errors.fullName?.message} {...register("fullName")} />
+            <Input label={t.checkout.fullName} error={translateFieldMessage(errors.fullName?.message, t)} {...register("fullName")} />
             <Input
               label={t.checkout.phoneNumber}
               inputMode="tel"
               dir="ltr"
-              error={errors.phoneNumber?.message}
+              error={translateFieldMessage(errors.phoneNumber?.message, t)}
               {...register("phoneNumber")}
             />
-            <Input label={t.checkout.addressLine1} error={errors.addressLine1?.message} {...register("addressLine1")} />
-            <Input label={t.checkout.city} error={errors.city?.message} {...register("city")} />
+            <Input label={t.checkout.addressLine1} error={translateFieldMessage(errors.addressLine1?.message, t)} {...register("addressLine1")} />
+            <Input label={t.checkout.city} error={translateFieldMessage(errors.city?.message, t)} {...register("city")} />
+            <Input
+              label={`${t.checkout.email} (${t.common.optional})`}
+              type="email"
+              inputMode="email"
+              dir="ltr"
+              error={translateFieldMessage(errors.email?.message, t)}
+              {...register("email")}
+            />
           </div>
           <Textarea label={t.checkout.notes} placeholder={t.checkout.notesPlaceholder} {...register("notes")} />
         </section>
@@ -140,8 +158,9 @@ export function CheckoutForm() {
           </label>
         </section>
 
-        <Button type="submit" size="lg" isLoading={createOrder.isPending || isSubmitting} disabled={items.length === 0}>
-          {t.checkout.placeOrder} — {total.toLocaleString(locale)}
+        <Button type="submit" size="lg" isLoading={createOrder.isPending || isSubmitting} disabled={items.length === 0 || total === null}>
+          {t.checkout.placeOrder}
+          {total === null ? "" : ` — ${formatCurrency(total, locale)}`}
         </Button>
       </form>
     </div>

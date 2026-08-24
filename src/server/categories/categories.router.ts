@@ -1,4 +1,5 @@
-import { publicProcedure, adminProcedure, router } from "../trpc";
+import { publicProcedure, adminProcedure, requireRoles, router } from "../trpc";
+import { DESTRUCTIVE_ROLES } from "@/lib/constants";
 import { TRPCError } from "@trpc/server";
 import {
   categoryCreateSchema,
@@ -31,7 +32,7 @@ export const categoriesRouter = router({
       return editCategory(input.id, input.data);
     }),
 
-  delete: adminProcedure.input(categoryIdInputSchema).mutation(({ input }) => {
+  delete: requireRoles(DESTRUCTIVE_ROLES).input(categoryIdInputSchema).mutation(({ input }) => {
     return removeCategory(input.id);
   }),
 });

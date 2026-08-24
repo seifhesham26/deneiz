@@ -8,12 +8,14 @@ import { CartSummary } from "@/components/storefront/cart/cart-summary";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/cart.store";
 import { useIsHydrated } from "@/hooks/shared/useIsHydrated";
-import { DEFAULT_SHIPPING_FEE, FREE_SHIPPING_THRESHOLD } from "@/lib/constants";
+import { useGetStoreSettings } from "@/hooks/admin/useGetStoreSettings";
+import { calculateShipping } from "@/utils/calculate-shipping";
 
 export default function CartPage() {
   const { t } = useLang();
   const items = useCartStore((state) => state.items);
   const isHydrated = useIsHydrated();
+  const storeSettings = useGetStoreSettings();
 
   if (!isHydrated) {
     return <div className="content-shell section-y" aria-busy="true" />;
@@ -21,8 +23,11 @@ export default function CartPage() {
 
   const subtotal =
     Math.round(items.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0) * 100) / 100;
-  const shippingFee =
-    subtotal === 0 || subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
+  // Shipping comes from the same settings row the server charges from, so the
+  // total shown here can never disagree with the total on the order
+  const shippingFee = storeSettings.data
+    ? calculateShipping(subtotal, storeSettings.data)
+    : null;
 
   return (
     <div className="content-shell section-y">
@@ -42,11 +47,10 @@ export default function CartPage() {
             <CartSummary
               subtotal={subtotal}
               shippingFee={shippingFee}
-              freeShippingThreshold={FREE_SHIPPING_THRESHOLD}
+              freeShippingThreshold={storeSettings.data?.freeShippingThreshold ?? null}
             />
           </div>
 
-          {/* PROTOTYPE: shipping/threshold values are constants until the settings module is wired into the storefront */}
           <ul className="min-w-0 flex-1 divide-y divide-border border-t border-border">
             {items.map((item) => (
               <CartItemRow key={item.productId} item={item} />

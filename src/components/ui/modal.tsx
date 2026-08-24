@@ -21,6 +21,15 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
   const isHydrated = useIsHydrated();
   const panelRef = useRef<HTMLDivElement | null>(null);
 
+  // Call sites pass inline arrows, so onClose is a new reference every render.
+  // Reading it through a ref keeps the focus effect keyed on `open` alone —
+  // otherwise a refetch behind an open modal yanks focus out of the field the
+  // user is typing in.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useBodyScrollLock(isHydrated && open);
 
   useEffect(() => {
@@ -31,7 +40,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -58,7 +67,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
       document.removeEventListener("keydown", handleKeyDown);
       previouslyFocused?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!isHydrated) return null;
 
@@ -66,7 +75,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-6"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-scrim/50 p-0 sm:items-center sm:p-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -78,7 +87,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
             aria-modal="true"
             aria-label={title}
             tabIndex={-1}
-            className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-surface-raised p-5 outline-none sm:rounded-2xl"
+            className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-surface-raised p-5 sm:rounded-2xl"
             initial={{ y: 40, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}

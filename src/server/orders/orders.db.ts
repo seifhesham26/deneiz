@@ -1,7 +1,10 @@
 import { and, asc, desc, eq, ilike, ne, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { containsPattern } from "@/utils/escape-like";
 import { getDb } from "@/db";
+import { STORE_TIMEZONE } from "@/lib/constants";
 import {
+  categories,
   inventoryLogs,
   orderItems,
   orders,
@@ -87,8 +90,9 @@ export async function placeOrderAtomic(
       .returning();
 
     await tx.insert(orderItems).values(
-      record.items.map((item) => ({
+      record.items.map((item, index) => ({
         orderId: order.id,
+        displayOrder: index,
         productId: item.productId,
         productNameEn: item.productNameEn,
         productNameAr: item.productNameAr,
@@ -102,6 +106,16 @@ export async function placeOrderAtomic(
 
     return order;
   });
+}
+
+/** Reads a timestamptz in store-local time so day/week buckets match the shop floor. */
+function storeLocal(column: typeof orders.createdAt) {
+  return sql`(${column} AT TIME ZONE ${STORE_TIMEZONE})`;
+}
+
+/** Midnight today, store-local, as a timestamptz. */
+function storeDayStart() {
+  return sql`(date_trunc('day', now() AT TIME ZONE ${STORE_TIMEZONE}) AT TIME ZONE ${STORE_TIMEZONE})`;
 }
 
 const itemListSubquery = sql<number>`(
@@ -120,15 +134,16 @@ export async function listOrdersForAdmin(filters: {
   if (filters.search) {
     conditions.push(
       or(
-        ilike(orders.orderNumber, `%${filters.search}%`),
-        ilike(orders.fullName, `%${filters.search}%`),
-        ilike(orders.phoneNumber, `%${filters.search}%`),
+        ilike(orders.orderNumber, containsPattern(filters.search)),
+        ilike(orders.fullName, containsPattern(filters.search)),
+        ilike(orders.phoneNumber, containsPattern(filters.search)),
       ),
     );
   }
   const where = and(...conditions);
 
-  const items = await database
+  const [items, [{ count }]] = await Promise.all([
+    database
     .select({
       id: orders.id,
       orderNumber: orders.orderNumber,
@@ -143,14 +158,14 @@ export async function listOrdersForAdmin(filters: {
     })
     .from(orders)
     .where(where)
-    .orderBy(desc(orders.createdAt))
+    .orderBy(desc(orders.createdAt), asc(orders.id))
     .limit(filters.pageSize)
-    .offset((filters.page - 1) * filters.pageSize);
-
-  const [{ count }] = await database
+    .offset((filters.page - 1) * filters.pageSize),
+    database
     .select({ count: sql<number>`count(*)::int` })
     .from(orders)
-    .where(where);
+    .where(where),
+  ]);
 
   return { items, total: count };
 }
@@ -164,7 +179,7 @@ export async function getOrderWithItems(id: string) {
     .select()
     .from(orderItems)
     .where(eq(orderItems.orderId, id))
-    .orderBy(asc(orderItems.id));
+    .orderBy(asc(orderItems.displayOrder), asc(orderItems.id));
 
   return { ...order, items };
 }
@@ -192,7 +207,8 @@ export async function updatePaymentStatus(
 export async function listOrdersForUser(userId: string, page: number, pageSize: number) {
   const database = getDb();
   const where = eq(orders.userId, userId);
-  const items = await database
+  const [items, [{ count }]] = await Promise.all([
+    database
     .select({
       id: orders.id,
       orderNumber: orders.orderNumber,
@@ -204,14 +220,14 @@ export async function listOrdersForUser(userId: string, page: number, pageSize: 
     })
     .from(orders)
     .where(where)
-    .orderBy(desc(orders.createdAt))
+    .orderBy(desc(orders.createdAt), asc(orders.id))
     .limit(pageSize)
-    .offset((page - 1) * pageSize);
-
-  const [{ count }] = await database
+    .offset((page - 1) * pageSize),
+    database
     .select({ count: sql<number>`count(*)::int` })
     .from(orders)
-    .where(where);
+    .where(where),
+  ]);
 
   return { items, total: count };
 }
@@ -220,7 +236,14 @@ export async function listOrdersForUser(userId: string, page: number, pageSize: 
 export async function getDashboardStats() {
   const database = getDb();
 
-  const [revenue30d] = await database
+  const [
+    [revenue30d],
+    [ordersToday],
+    [pendingReviewsCount],
+    recentOrders,
+    revenueSeries,
+  ] = await Promise.all([
+    database
     .select({ revenue: sql<number>`coalesce(sum(${orders.total}), 0)::float8` })
     .from(orders)
     .where(
@@ -228,19 +251,21 @@ export async function getDashboardStats() {
         ne(orders.status, "cancelled"),
         sql`${orders.createdAt} >= now() - interval '30 days'`,
       ),
-    );
-
-  const [ordersToday] = await database
+    ),
+    database
     .select({ count: sql<number>`count(*)::int` })
     .from(orders)
-    .where(sql`${orders.createdAt} >= date_trunc('day', now())`);
-
-  const [pendingReviewsCount] = await database
+    // Store-local day, and cancelled orders excluded to match revenue above
+    .where(
+      and(
+        ne(orders.status, "cancelled"),
+        sql`${orders.createdAt} >= ${storeDayStart()}`,
+      ),
+    ),
+    database
     .select({ count: sql<number>`count(*)::int` })
     .from(reviews)
-    .where(eq(reviews.status, "pending"));
-
-  const [recentOrders, revenueSeries] = await Promise.all([
+    .where(eq(reviews.status, "pending")),
     database
       .select({
         id: orders.id,
@@ -255,13 +280,13 @@ export async function getDashboardStats() {
       .limit(8),
     database
       .select({
-        bucket: sql<string>`to_char(date_trunc('day', ${orders.createdAt}), 'YYYY-MM-DD')`,
+        bucket: sql<string>`to_char(date_trunc('day', ${storeLocal(orders.createdAt)}), 'YYYY-MM-DD')`,
         revenue: sql<number>`sum(${orders.total})::float8`,
       })
       .from(orders)
       .where(and(ne(orders.status, "cancelled"), sql`${orders.createdAt} >= now() - interval '30 days'`))
-      .groupBy(sql`date_trunc('day', ${orders.createdAt})`)
-      .orderBy(sql`date_trunc('day', ${orders.createdAt})`),
+      .groupBy(sql`date_trunc('day', ${storeLocal(orders.createdAt)})`)
+      .orderBy(sql`date_trunc('day', ${storeLocal(orders.createdAt)})`),
   ]);
 
   return {
@@ -280,7 +305,7 @@ export async function getSalesSeries(days: number, granularity: "daily" | "weekl
 
   return database
     .select({
-      bucket: sql<string>`to_char(date_trunc(${bucket}, ${orders.createdAt}), 'YYYY-MM-DD')`,
+      bucket: sql<string>`to_char(date_trunc(${bucket}, ${storeLocal(orders.createdAt)}), 'YYYY-MM-DD')`,
       revenue: sql<number>`sum(${orders.total})::float8`,
       orderCount: sql<number>`count(*)::int`,
     })
@@ -288,16 +313,16 @@ export async function getSalesSeries(days: number, granularity: "daily" | "weekl
     .where(
       and(ne(orders.status, "cancelled"), sql`${orders.createdAt} >= now() - (${days} || ' days')::interval`),
     )
-    .groupBy(sql`date_trunc(${bucket}, ${orders.createdAt})`)
-    .orderBy(sql`date_trunc(${bucket}, ${orders.createdAt})`);
+    .groupBy(sql`date_trunc(${bucket}, ${storeLocal(orders.createdAt)})`)
+    .orderBy(sql`date_trunc(${bucket}, ${storeLocal(orders.createdAt)})`);
 }
 
 export async function getTopSellingProducts(limit = 10, days = 90) {
   return getDb()
     .select({
       productId: orderItems.productId,
-      nameEn: orderItems.productNameEn,
-      nameAr: orderItems.productNameAr,
+      nameEn: sql<string>`max(${orderItems.productNameEn})`,
+      nameAr: sql<string>`max(${orderItems.productNameAr})`,
       unitsSold: sql<number>`sum(${orderItems.quantity})::int`,
       revenue: sql<number>`sum(${orderItems.lineTotal})::float8`,
     })
@@ -309,33 +334,35 @@ export async function getTopSellingProducts(limit = 10, days = 90) {
         sql`${orders.createdAt} >= now() - (${days} || ' days')::interval`,
       ),
     )
-    .groupBy(orderItems.productId, orderItems.productNameEn, orderItems.productNameAr)
+    // Grouping by the snapshot name too would split a renamed product in two
+    .groupBy(orderItems.productId)
     .orderBy(desc(sql`sum(${orderItems.quantity})`))
     .limit(limit);
 }
 
-export async function getRevenueByCategory() {
+export async function getRevenueByCategory(days = 90) {
   return getDb()
     .select({
       categoryId: products.categoryId,
-      categoryNameEn: sql<string | null>`(select c."nameEn" from categories c where c.id = ${products.categoryId})`,
-      categoryNameAr: sql<string | null>`(select c."nameAr" from categories c where c.id = ${products.categoryId})`,
+      categoryNameEn: categories.nameEn,
+      categoryNameAr: categories.nameAr,
       revenue: sql<number>`sum(${orderItems.lineTotal})::float8`,
     })
     .from(orderItems)
-    .innerJoin(products, eq(orderItems.productId, products.id))
+    // leftJoin: orderItems.productId is ON DELETE SET NULL, so an innerJoin
+    // silently drops every deleted product's historical revenue
+    .leftJoin(products, eq(orderItems.productId, products.id))
+    .leftJoin(categories, eq(products.categoryId, categories.id))
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
-    .where(ne(orders.status, "cancelled"))
-    .groupBy(products.categoryId);
+    .where(
+      and(
+        ne(orders.status, "cancelled"),
+        sql`${orders.createdAt} >= now() - (${days} || ' days')::interval`,
+      ),
+    )
+    .groupBy(products.categoryId, categories.nameEn, categories.nameAr);
 }
 
-export async function countOrdersSince(date: Date): Promise<number> {
-  const [{ count }] = await getDb()
-    .select({ count: sql<number>`count(*)::int` })
-    .from(orders)
-    .where(sql`${orders.createdAt} >= ${date.toISOString()}`);
-  return count;
-}
 
 export async function isOrderNumberTaken(orderNumber: string): Promise<boolean> {
   const [row] = await getDb()

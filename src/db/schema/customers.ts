@@ -22,5 +22,8 @@ export const customers = pgTable("customers", {
   isBanned: boolean("isBanned").notNull().default(false),
   note: text("note"),
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });

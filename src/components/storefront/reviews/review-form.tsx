@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { pushToast } from "@/components/ui/toast";
 import { useCreateReview } from "@/hooks/storefront/useCreateReview";
-import type { Dictionary } from "@/lib/dictionary";
+import { translateError, translateFieldMessage } from "@/lib/translate-error";
 
 interface ReviewFormProps {
   productId: string;
@@ -17,20 +17,8 @@ interface ReviewFormProps {
 
 type ReviewFormErrors = Partial<Record<"authorName" | "rating" | "title" | "body", string>>;
 
-/** Zod messages carry canonical keys; the dictionary renders them per locale. */
-function translateZodMessage(message: string, t: Dictionary): string {
-  const match = message.match(/^(tooShort:(\d+))$/);
-  if (match) return t.errors.tooShort(Number(match[2]));
-  switch (message) {
-    case "required":
-      return t.errors.required;
-    default:
-      return message.length <= 40 ? message : t.errors.generic;
-  }
-}
-
 export function ReviewForm({ productId, onSubmitted }: ReviewFormProps) {
-  const { locale, t } = useLang();
+  const { t } = useLang();
   const createReview = useCreateReview();
   const [rating, setRating] = useState(5);
   const [errors, setErrors] = useState<ReviewFormErrors>({});
@@ -62,18 +50,18 @@ export function ReviewForm({ productId, onSubmitted }: ReviewFormProps) {
           if (fieldErrors) {
             setErrors({
               authorName: fieldErrors.authorName?.[0]
-                ? translateZodMessage(fieldErrors.authorName[0], t)
+                ? translateFieldMessage(fieldErrors.authorName[0], t)
                 : undefined,
               title: fieldErrors.title?.[0]
-                ? translateZodMessage(fieldErrors.title[0], t)
+                ? translateFieldMessage(fieldErrors.title[0], t)
                 : undefined,
               body: fieldErrors.body?.[0]
-                ? translateZodMessage(fieldErrors.body[0], t)
+                ? translateFieldMessage(fieldErrors.body[0], t)
                 : undefined,
             });
             return;
           }
-          pushToast(error.message || t.errors.generic, "error");
+          pushToast(translateError(error, t), "error");
         },
       },
     );
@@ -120,7 +108,7 @@ export function ReviewForm({ productId, onSubmitted }: ReviewFormProps) {
       />
 
       <Button type="submit" isLoading={createReview.isPending} className="self-start">
-        {locale === "ar" ? t.reviewForm.submit : t.reviewForm.submit}
+        {t.reviewForm.submit}
       </Button>
     </form>
   );

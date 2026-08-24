@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useLang } from "@/components/providers/lang-provider";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
+import { ADMIN_PAGE_SIZE } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -16,9 +18,10 @@ export function StockTable() {
   const { locale, t } = useLang();
   const [searchDraft, setSearchDraft] = useState("");
   const [adjustingProductId, setAdjustingProductId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const search = useDebounce(searchDraft, 300);
 
-  const { data, isLoading } = useGetInventory({ search, page: 1, pageSize: 50 });
+  const { data, isLoading } = useGetInventory({ search, page });
   const history = useGetStockHistory(adjustingProductId ?? undefined);
 
   return (
@@ -119,6 +122,13 @@ export function StockTable() {
           </div>
         ) : null}
       </Modal>
+
+      <Pagination
+        page={page}
+        pageCount={Math.max(1, Math.ceil((data?.total ?? 0) / ADMIN_PAGE_SIZE))}
+        onPageChange={setPage}
+        className="mt-6"
+      />
     </div>
   );
 }

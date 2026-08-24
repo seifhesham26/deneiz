@@ -1,5 +1,8 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
+  index,
   integer,
   pgEnum,
   pgTable,
@@ -30,4 +33,7 @@ export const reviews = pgTable("reviews", {
   status: reviewStatusEnum("status").notNull().default("pending"),
   isFlagged: boolean("isFlagged").notNull().default(false),
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("reviews_productId_idx").on(table.productId),
+  check("reviews_rating_range", sql`${table.rating} between 1 and 5`),
+]);

@@ -1,4 +1,5 @@
-import { publicProcedure, adminProcedure, router } from "../trpc";
+import { publicProcedure, adminProcedure, requireRoles, router } from "../trpc";
+import { DESTRUCTIVE_ROLES } from "@/lib/constants";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { bannerCreateSchema, bannerIdInputSchema, bannerUpdateSchema } from "./banners.validators";
@@ -38,7 +39,7 @@ export const bannersRouter = router({
       return editBanner(input.id, input.data);
     }),
 
-  delete: adminProcedure.input(bannerIdInputSchema).mutation(({ input }) => {
+  delete: requireRoles(DESTRUCTIVE_ROLES).input(bannerIdInputSchema).mutation(({ input }) => {
     return removeBanner(input.id);
   }),
 });

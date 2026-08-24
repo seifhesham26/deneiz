@@ -17,6 +17,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
 ) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
+  const errorId = `${inputId}-error`;
 
   return (
     <div className="flex w-full flex-col gap-1">
@@ -30,9 +31,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           ref={ref}
           id={inputId}
           aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
           className={cn(
             "min-h-11 w-full rounded-lg border border-border bg-surface-raised px-3 text-sm text-text-primary",
-            "placeholder:text-text-muted focus:border-accent focus:outline-none",
+            "placeholder:text-text-muted focus:border-accent",
             error && "border-danger",
             trailing && "pe-12",
             className,
@@ -44,7 +46,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         ) : null}
       </div>
       {error ? (
-        <p className="text-xs text-danger" role="alert">
+        <p id={errorId} className="text-xs text-danger" role="alert">
           {error}
         </p>
       ) : hint ? (

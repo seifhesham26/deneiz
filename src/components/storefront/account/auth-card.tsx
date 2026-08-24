@@ -1,8 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  signInInputSchema,
+  signUpInputSchema,
+  type AuthFormInput,
+} from "@/server/auth/auth.validators";
+import { translateFieldMessage } from "@/lib/translate-error";
 import { ShieldCheck } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useLang } from "@/components/providers/lang-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +30,8 @@ function mapAuthError(message: string | undefined, t: ReturnType<typeof useLang>
   if (normalized.includes("already exist") || normalized.includes("unable to create user")) {
     return t.errors.emailTaken;
   }
-  return message.length <= 80 ? message : t.errors.generic;
+  // Never fall through to Better Auth's raw English string
+  return t.errors.generic;
 }
 
 interface AuthCardProps {
@@ -31,67 +40,54 @@ interface AuthCardProps {
 
 export function AuthCard({ onSuccess }: AuthCardProps) {
   const { t } = useLang();
+  const reduceMotion = useReducedMotion();
   const [mode, setMode] = useState<AuthMode>("signIn");
   const [formError, setFormError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<{ name?: string; email?: string; password?: string }>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  // Sign-up needs the name field; sign-in does not — the schema follows the mode
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<AuthFormInput>({
+    resolver: zodResolver(mode === "signUp" ? signUpInputSchema : signInInputSchema),
+    defaultValues: { name: "", email: "", password: "" },
+  });
 
   function switchMode(next: AuthMode) {
     setMode(next);
     setFormError(null);
-    setFieldErrors({});
+    reset();
   }
 
-  function validate(): boolean {
-    const errors: typeof fieldErrors = {};
-    if (mode === "signUp" && form.name.trim().length < 2) {
-      errors.name = t.errors.tooShort(2);
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      errors.email = t.errors.invalidEmail;
-    }
-    if (form.password.length < 8) {
-      errors.password = t.errors.shortPassword;
-    }
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
-  }
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function onSubmit(values: AuthFormInput) {
     setFormError(null);
 
-    if (!validate()) return;
-
-    setSubmitting(true);
-    try {
+    {
       if (mode === "signIn") {
         const result = await authClient.signIn.email({
-          email: form.email.trim(),
-          password: form.password,
+          email: values.email.trim(),
+          password: values.password,
         });
         if (result.error) {
           setFormError(mapAuthError(result.error.message, t));
           return;
         }
-        pushToast(t.account.welcome(result.data!.user.name), "success");
+        pushToast(t.account.welcome(result.data?.user.name ?? ""), "success");
       } else {
         const result = await authClient.signUp.email({
-          name: form.name.trim(),
-          email: form.email.trim(),
-          password: form.password,
+          name: values.name.trim(),
+          email: values.email.trim(),
+          password: values.password,
         });
         if (result.error) {
           setFormError(mapAuthError(result.error.message, t));
           return;
         }
         // Email verification is intentionally off — the session is live immediately
-        pushToast(t.account.welcome(result.data!.user.name), "success");
+        pushToast(t.account.welcome(result.data?.user.name ?? ""), "success");
       }
       onSuccess();
-    } finally {
-      setSubmitting(false);
     }
   }
 
@@ -118,7 +114,10 @@ export function AuthCard({ onSuccess }: AuthCardProps) {
             key={tab.value}
             type="button"
             role="tab"
+            id={`auth-tab-${tab.value}`}
             aria-selected={mode === tab.value}
+            aria-controls="auth-tabpanel"
+            tabIndex={mode === tab.value ? 0 : -1}
             onClick={() => switchMode(tab.value)}
             className={`relative min-h-11 rounded-full px-4 text-sm font-medium transition-colors ${
               mode === tab.value ? "text-text-inverse" : "text-text-secondary hover:text-text-primary"
@@ -128,7 +127,9 @@ export function AuthCard({ onSuccess }: AuthCardProps) {
               <motion.span
                 layoutId="auth-tab-pill"
                 className="absolute inset-0 rounded-full bg-primary"
-                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                transition={
+                  reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 380, damping: 32 }
+                }
               />
             ) : null}
             <span className="relative">{tab.label}</span>
@@ -136,18 +137,23 @@ export function AuthCard({ onSuccess }: AuthCardProps) {
         ))}
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+      <form
+        onSubmit={(event) => void handleSubmit(onSubmit)(event)}
+        className="flex flex-col gap-4"
+        noValidate
+        role="tabpanel"
+        id="auth-tabpanel"
+        aria-labelledby={`auth-tab-${mode}`}
+      >
         <FormErrorBanner message={formError} />
 
         {mode === "signUp" ? (
           <Input
             label={t.account.name}
-            name="name"
             autoComplete="name"
             placeholder={t.account.namePlaceholder}
-            value={form.name}
-            onChange={(event) => setForm((state) => ({ ...state, name: event.target.value }))}
-            error={fieldErrors.name}
+            error={translateFieldMessage(errors.name?.message, t)}
+            {...register("name")}
             required
             minLength={2}
           />
@@ -155,30 +161,26 @@ export function AuthCard({ onSuccess }: AuthCardProps) {
 
         <Input
           label={t.account.email}
-          name="email"
           type="email"
           inputMode="email"
           autoComplete="email"
           placeholder="you@example.com"
-          value={form.email}
-          onChange={(event) => setForm((state) => ({ ...state, email: event.target.value }))}
-          error={fieldErrors.email}
+          error={translateFieldMessage(errors.email?.message, t)}
+          {...register("email")}
           required
         />
 
         <PasswordInput
           label={t.account.password}
-          name="password"
           autoComplete={mode === "signIn" ? "current-password" : "new-password"}
           hint={mode === "signUp" ? t.errors.shortPassword : undefined}
-          value={form.password}
-          onChange={(event) => setForm((state) => ({ ...state, password: event.target.value }))}
-          error={fieldErrors.password}
+          error={translateFieldMessage(errors.password?.message, t)}
+          {...register("password")}
           required
           minLength={8}
         />
 
-        <Button type="submit" size="lg" isLoading={submitting}>
+        <Button type="submit" size="lg" isLoading={isSubmitting}>
           {mode === "signIn" ? t.account.signIn : t.account.signUp}
         </Button>
       </form>

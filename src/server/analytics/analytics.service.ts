@@ -1,4 +1,6 @@
 import { getDashboardStats, getRevenueByCategory, getSalesSeries, getTopSellingProducts } from "../orders/orders.db";
+import { countLowStockProducts, listLowStockProducts } from "../products/products.db";
+import { STORE_TIMEZONE } from "@/lib/constants";
 import type { ANALYTICS_GRANULARITIES } from "./analytics.validators";
 
 type Granularity = (typeof ANALYTICS_GRANULARITIES)[number];
@@ -13,21 +15,20 @@ function fillDailySeries(
 ): { bucket: string; revenue: number }[] {
   const byBucket = new Map(rows.map((row) => [row.bucket, row.revenue]));
   const filled: { bucket: string; revenue: number }[] = [];
+  // Store-local days, matching how the SQL buckets them — walking UTC here
+  // would shift every label by the timezone offset
+  const formatter = new Intl.DateTimeFormat("en-CA", { timeZone: STORE_TIMEZONE });
   const today = new Date();
 
   for (let offset = days - 1; offset >= 0; offset -= 1) {
     const day = new Date(today);
-    day.setUTCDate(day.getUTCDate() - offset);
-    const key = day.toISOString().slice(0, 10);
+    day.setDate(day.getDate() - offset);
+    const key = formatter.format(day);
     filled.push({ bucket: key, revenue: byBucket.get(key) ?? 0 });
   }
   return filled;
 }
 
-export async function getRevenueTrend(days = 30) {
-  const stats = await getDashboardStats();
-  return fillDailySeries(stats.revenueSeries, days);
-}
 
 export async function getSalesOverTime(granularity: Granularity, days: number) {
   const rows = await getSalesSeries(days, granularity);
@@ -44,18 +45,19 @@ export async function getCategoryRevenue() {
 }
 
 export async function buildDashboardSnapshot(threshold: number) {
-  const [stats, lowStock] = await Promise.all([
+  const [stats, lowStock, lowStockCount] = await Promise.all([
     getDashboardStats(),
-    import("@/server/products/products.db").then((module) =>
-      module.listLowStockProducts(threshold),
-    ),
+    listLowStockProducts(threshold),
+    countLowStockProducts(threshold),
   ]);
 
   return {
     revenue30d: stats.revenue30d,
     ordersToday: stats.ordersToday,
     pendingReviews: stats.pendingReviews,
-    lowStockCount: lowStock.length,
+    // A COUNT(*), not the length of a list limited to 10 — the KPI read "10"
+    // whether there were ten low-stock products or two hundred
+    lowStockCount,
     recentOrders: stats.recentOrders,
     revenueSeries: stats.revenueSeries,
     lowStock,

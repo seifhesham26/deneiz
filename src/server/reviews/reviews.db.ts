@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { getDb } from "@/db";
 import { products, reviews } from "@/db/schema";
@@ -11,7 +11,8 @@ export async function listApprovedReviewsForProduct(
   const database = getDb();
   const where = and(eq(reviews.productId, productId), eq(reviews.status, "approved"));
 
-  const items = await database
+  const [items, [{ count }]] = await Promise.all([
+    database
     .select({
       id: reviews.id,
       authorName: reviews.authorName,
@@ -22,14 +23,14 @@ export async function listApprovedReviewsForProduct(
     })
     .from(reviews)
     .where(where)
-    .orderBy(desc(reviews.createdAt))
+    .orderBy(desc(reviews.createdAt), asc(reviews.id))
     .limit(pageSize)
-    .offset((page - 1) * pageSize);
-
-  const [{ count }] = await database
+    .offset((page - 1) * pageSize),
+    database
     .select({ count: sql<number>`count(*)::int` })
     .from(reviews)
-    .where(where);
+    .where(where),
+  ]);
 
   return { items, total: count };
 }
@@ -65,7 +66,8 @@ export async function listReviewsForAdmin(filters: {
   if (filters.minRating) conditions.push(gte(reviews.rating, filters.minRating));
   const where = conditions.length ? and(...conditions) : undefined;
 
-  const items = await database
+  const [items, [{ count }]] = await Promise.all([
+    database
     .select({
       id: reviews.id,
       authorName: reviews.authorName,
@@ -82,14 +84,14 @@ export async function listReviewsForAdmin(filters: {
     .from(reviews)
     .innerJoin(products, eq(reviews.productId, products.id))
     .where(where)
-    .orderBy(desc(reviews.isFlagged), desc(reviews.createdAt))
+    .orderBy(desc(reviews.isFlagged), desc(reviews.createdAt), asc(reviews.id))
     .limit(filters.pageSize)
-    .offset((filters.page - 1) * filters.pageSize);
-
-  const [{ count }] = await database
+    .offset((filters.page - 1) * filters.pageSize),
+    database
     .select({ count: sql<number>`count(*)::int` })
     .from(reviews)
-    .where(where);
+    .where(where),
+  ]);
 
   return { items, total: count };
 }

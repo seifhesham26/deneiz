@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
 import { useUiStore } from "@/store/ui.store";
@@ -14,6 +14,7 @@ import { useMediaQuery } from "@/hooks/shared/useMediaQuery";
 const ADMIN_ROLES = ["super_admin", "manager", "staff"];
 
 export function MobileMenu() {
+  const reduceMotion = useReducedMotion();
   const { locale, t } = useLang();
   const pathname = usePathname();
   const isOpen = useUiStore((state) => state.isMobileMenuOpen);
@@ -64,7 +65,7 @@ export function MobileMenu() {
       {isOpen ? (
         <>
           <motion.div
-            className="fixed inset-0 z-50 bg-black/50 lg:hidden"
+            className="fixed inset-0 z-50 bg-scrim/50 lg:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -78,7 +79,7 @@ export function MobileMenu() {
             initial={{ x: offscreenX }}
             animate={{ x: 0 }}
             exit={{ x: offscreenX }}
-            transition={{ type: "spring", stiffness: 320, damping: 32 }}
+            transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 320, damping: 32 }}
           >
             <div className="mb-4 flex items-center justify-between">
               <span className="text-lg font-semibold">{t.common.storeName}</span>

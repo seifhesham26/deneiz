@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   BarChart3,
   Boxes,
@@ -25,6 +25,7 @@ import { useMediaQuery } from "@/hooks/shared/useMediaQuery";
 import { cn } from "@/lib/cn";
 
 export function Sidebar() {
+  const reduceMotion = useReducedMotion();
   const { locale, t } = useLang();
   const pathname = usePathname();
   const isOpen = useUiStore((state) => state.isAdminSidebarOpen);
@@ -86,8 +87,8 @@ export function Sidebar() {
               className={cn(
                 "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm transition-colors",
                 isActive
-                  ? "bg-white/10 font-medium text-admin-text"
-                  : "text-admin-text/70 hover:bg-white/5 hover:text-admin-text",
+                  ? "bg-admin-text/10 font-medium text-admin-text"
+                  : "text-admin-text/70 hover:bg-admin-text/5 hover:text-admin-text",
               )}
             >
               <item.icon aria-hidden className="size-4.5" />
@@ -127,7 +128,7 @@ export function Sidebar() {
         {isOpen ? (
           <>
             <motion.div
-              className="fixed inset-0 z-50 bg-black/50 lg:hidden"
+              className="fixed inset-0 z-50 bg-scrim/50 lg:hidden"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -141,7 +142,7 @@ export function Sidebar() {
               initial={{ x: locale === "ar" ? "100%" : "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: locale === "ar" ? "100%" : "-100%" }}
-              transition={{ type: "spring", stiffness: 320, damping: 32 }}
+              transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 320, damping: 32 }}
             >
               <div className="mb-5 flex items-center justify-between">
                 <span className="text-lg font-semibold tracking-wide">{t.admin.panelName}</span>
@@ -149,7 +150,7 @@ export function Sidebar() {
                   type="button"
                   aria-label={t.common.close}
                   onClick={() => setOpen(false)}
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-admin-text/70 hover:bg-white/5 hover:text-admin-text"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-admin-text/70 hover:bg-admin-text/5 hover:text-admin-text"
                 >
                   <X aria-hidden className="size-5" />
                 </button>

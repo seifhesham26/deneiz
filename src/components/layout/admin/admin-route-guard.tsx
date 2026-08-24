@@ -5,8 +5,8 @@ import { ShieldAlert } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
 import { Button } from "@/components/ui/button";
 import { useGetSessionUser } from "@/hooks/storefront/useGetSessionUser";
-
-const ADMIN_ROLES = ["super_admin", "manager", "staff"];
+import { ADMIN_ROLES } from "@/lib/constants";
+import type { UserRole } from "@/types/shared";
 
 interface AdminRouteGuardProps {
   children: React.ReactNode;
@@ -20,11 +20,11 @@ interface AdminRouteGuardProps {
 export function AdminRouteGuard({ children }: AdminRouteGuardProps) {
   const { t } = useLang();
   const { user, isLoading } = useGetSessionUser();
-  const isAdmin = Boolean(user && ADMIN_ROLES.includes(user.role));
+  const isAdmin = Boolean(user && ADMIN_ROLES.includes(user.role as UserRole));
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center p-10 text-sm text-text-secondary" aria-busy="true">
+      <div className="flex min-h-dvh items-center justify-center p-10 text-sm text-text-secondary" aria-busy="true">
         {t.common.loading}
       </div>
     );
@@ -32,7 +32,7 @@ export function AdminRouteGuard({ children }: AdminRouteGuardProps) {
 
   if (!user || !isAdmin) {
     return (
-      <div className="flex flex-1 items-center justify-center p-10">
+      <div className="flex min-h-dvh items-center justify-center bg-surface p-10">
         <div className="flex max-w-sm flex-col items-center gap-4 rounded-2xl border border-border bg-surface-raised p-8 text-center">
           <ShieldAlert aria-hidden className="size-10 text-danger" />
           <p className="text-sm font-medium">{t.admin.login.forbidden}</p>

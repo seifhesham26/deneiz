@@ -1,13 +1,12 @@
 "use client";
 
 import { trpc } from "@/lib/trpc-client";
-import { useQueryClient } from "@tanstack/react-query";
 
 export function useUpdateBanner() {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
   return trpc.banners.update.useMutation({
     onSuccess: () => {
-      void queryClient.invalidateQueries();
+      void utils.banners.invalidate();
     },
   });
 }

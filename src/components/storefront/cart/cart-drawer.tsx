@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect } from "react";
 import { useLang } from "@/components/providers/lang-provider";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { useBodyScrollLock } from "@/hooks/shared/useBodyScrollLock";
 import { formatCurrency } from "@/utils/format-currency";
 
 export function CartDrawer() {
+  const reduceMotion = useReducedMotion();
   const { locale, t } = useLang();
   const isOpen = useUiStore((state) => state.isCartDrawerOpen);
   const closeCartDrawer = useUiStore((state) => state.closeCartDrawer);
@@ -47,7 +48,7 @@ export function CartDrawer() {
       {open ? (
         <>
           <motion.div
-            className="fixed inset-0 z-50 bg-black/50"
+            className="fixed inset-0 z-50 bg-scrim/50"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -60,7 +61,7 @@ export function CartDrawer() {
             initial={{ x: offscreenX }}
             animate={{ x: 0 }}
             exit={{ x: offscreenX }}
-            transition={{ type: "spring", stiffness: 320, damping: 32 }}
+            transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 320, damping: 32 }}
           >
             <div className="flex items-center justify-between border-b border-border p-4">
               <h2 className="flex items-center gap-2 text-lg font-semibold">

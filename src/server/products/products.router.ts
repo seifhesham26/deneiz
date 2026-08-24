@@ -1,12 +1,14 @@
-import { publicProcedure, adminProcedure, router } from "../trpc";
+import { publicProcedure, adminProcedure, requireRoles, router } from "../trpc";
+import { DESTRUCTIVE_ROLES } from "@/lib/constants";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
-  productCreateSchema,
+  productCreateInputSchema,
   productIdInputSchema,
   productFiltersSchema,
   productSlugInputSchema,
   productUpdateSchema,
+  adminProductFiltersSchema,
 } from "./products.validators";
 import {
   getPublishedProductBySlug,
@@ -17,7 +19,8 @@ import {
 import {
   createProduct,
   listProductsForAdmin,
-  removeProduct,
+  archiveProduct,
+  destroyProduct,
   updateProduct,
 } from "./products.service";
 
@@ -55,19 +58,12 @@ export const productsRouter = router({
   }),
 
   listAdmin: adminProcedure
-    .input(
-      z.object({
-        search: z.string().trim().optional(),
-        status: z.enum(["draft", "published", "archived"]).optional(),
-        page: z.coerce.number().int().positive().default(1),
-        pageSize: z.coerce.number().int().positive().max(48).default(20),
-      }),
-    )
+    .input(adminProductFiltersSchema)
     .query(({ input }) => {
       return listProductsForAdmin(input);
     }),
 
-  create: adminProcedure.input(productCreateSchema).mutation(({ input }) => {
+  create: adminProcedure.input(productCreateInputSchema).mutation(({ input }) => {
     return createProduct(input);
   }),
 
@@ -77,7 +73,13 @@ export const productsRouter = router({
       return updateProduct(input.id, input.data);
     }),
 
-  delete: adminProcedure.input(productIdInputSchema).mutation(({ input }) => {
-    return removeProduct(input.id);
+  /** Reversible: sets status to archived and keeps ledger + reviews intact. */
+  archive: requireRoles(DESTRUCTIVE_ROLES).input(productIdInputSchema).mutation(({ input }) => {
+    return archiveProduct(input.id);
+  }),
+
+  /** Irreversible — cascades away stock history and reviews. */
+  delete: requireRoles(["super_admin"]).input(productIdInputSchema).mutation(({ input }) => {
+    return destroyProduct(input.id);
   }),
 });

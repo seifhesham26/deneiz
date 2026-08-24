@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { translateFieldMessage } from "@/lib/translate-error";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
 import { Button } from "@/components/ui/button";
@@ -8,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { pushToast } from "@/components/ui/toast";
+import { translateError } from "@/lib/translate-error";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   useCreateCategory,
 } from "@/hooks/admin/useCreateCategory";
@@ -25,6 +31,18 @@ interface CategoryFormValues {
   displayOrder: string;
   isActive: boolean;
 }
+
+/** Mirrors categoryCreateSchema for the fields this form owns. */
+const categoryFormSchema = z.object({
+  id: z.string().optional(),
+  nameEn: z.string().trim().min(2, { message: "tooShort:2" }),
+  nameAr: z.string().trim().min(2, { message: "tooShort:2" }),
+  slug: z.string(),
+  parentId: z.string(),
+  imageUrl: z.string(),
+  displayOrder: z.string(),
+  isActive: z.boolean(),
+});
 
 const EMPTY_FORM: CategoryFormValues = {
   nameEn: "",
@@ -48,31 +66,37 @@ function CategoryForm({
   const { locale, t } = useLang();
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
-  const [values, setValues] = useState(initialValues);
-  const isEdit = Boolean(values.id);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<CategoryFormValues>({
+    resolver: zodResolver(categoryFormSchema),
+    defaultValues: initialValues,
+  });
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const isEdit = Boolean(initialValues.id);
 
+  function submit(formValues: CategoryFormValues) {
     const shared = {
-      nameEn: values.nameEn.trim(),
-      nameAr: values.nameAr.trim(),
-      slug: values.slug.trim() || undefined,
-      parentId: values.parentId === "" ? null : values.parentId,
-      imageUrl: values.imageUrl.trim() || undefined,
-      displayOrder: Number(values.displayOrder) || 0,
-      isActive: values.isActive,
+      nameEn: formValues.nameEn.trim(),
+      nameAr: formValues.nameAr.trim(),
+      slug: formValues.slug.trim() || undefined,
+      parentId: formValues.parentId === "" ? null : formValues.parentId,
+      imageUrl: formValues.imageUrl.trim() || undefined,
+      displayOrder: Number(formValues.displayOrder) || 0,
+      isActive: formValues.isActive,
     };
 
-    if (isEdit && values.id) {
+    if (isEdit && initialValues.id) {
       updateCategory.mutate(
-        { id: values.id, data: shared },
+        { id: initialValues.id, data: shared },
         {
           onSuccess: () => {
             pushToast(t.admin.categoriesView.updated, "success");
             onDone();
           },
-          onError: (error) => pushToast(error.message || t.errors.generic, "error"),
+          onError: (error) => pushToast(translateError(error, t), "error"),
         },
       );
     } else {
@@ -83,7 +107,7 @@ function CategoryForm({
             pushToast(t.admin.categoriesView.created, "success");
             onDone();
           },
-          onError: (error) => pushToast(error.message || t.errors.generic, "error"),
+          onError: (error) => pushToast(translateError(error, t), "error"),
         },
       );
     }
@@ -93,19 +117,32 @@ function CategoryForm({
   const parentOptions = categories.filter((category) => category.parentId === null);
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
-      <Input label={t.admin.productsView.nameEn} value={values.nameEn} onChange={(e) => setValues({ ...values, nameEn: e.target.value })} required minLength={2} />
-      <Input label={t.admin.productsView.nameAr} value={values.nameAr} onChange={(e) => setValues({ ...values, nameAr: e.target.value })} required minLength={2} />
-      <Input label={`${t.admin.productsView.slug} (${t.common.optional})`} dir="ltr" value={values.slug} onChange={(e) => setValues({ ...values, slug: e.target.value })} />
+    <form onSubmit={(event) => void handleSubmit(submit)(event)} className="flex flex-col gap-4">
+      <Input
+        label={t.admin.productsView.nameEn}
+        error={translateFieldMessage(errors.nameEn?.message, t)}
+        {...register("nameEn")}
+      />
+      <Input
+        label={t.admin.productsView.nameAr}
+        error={translateFieldMessage(errors.nameAr?.message, t)}
+        {...register("nameAr")}
+      />
+      <Input
+        label={`${t.admin.productsView.slug} (${t.common.optional})`}
+        dir="ltr"
+        error={translateFieldMessage(errors.slug?.message, t)}
+        {...register("slug")}
+      />
 
       <Select
         label={t.admin.categoriesView.parent}
-        value={values.parentId}
-        onChange={(e) => setValues({ ...values, parentId: e.target.value })}
+        error={translateFieldMessage(errors.parentId?.message, t)}
+        {...register("parentId")}
       >
         <option value="">{t.admin.categoriesView.none}</option>
         {parentOptions
-          .filter((category) => category.id !== values.id)
+          .filter((category) => category.id !== initialValues.id)
           .map((category) => (
             <option key={category.id} value={category.id}>
               {locale === "ar" ? category.nameAr : category.nameEn}
@@ -120,23 +157,22 @@ function CategoryForm({
         <Input
           label={`${t.admin.categoriesView.imageUrl} (${t.common.optional})`}
           dir="ltr"
-          value={values.imageUrl}
-          onChange={(e) => setValues({ ...values, imageUrl: e.target.value })}
+          error={translateFieldMessage(errors.imageUrl?.message, t)}
+          {...register("imageUrl")}
         />
         <Input
           label={t.admin.categoriesView.displayOrder}
           type="number"
           min={0}
-          value={values.displayOrder}
-          onChange={(e) => setValues({ ...values, displayOrder: e.target.value })}
+          error={translateFieldMessage(errors.displayOrder?.message, t)}
+          {...register("displayOrder")}
         />
       </div>
 
       <label className="flex min-h-11 items-center gap-2 text-sm">
         <input
           type="checkbox"
-          checked={values.isActive}
-          onChange={(event) => setValues({ ...values, isActive: event.target.checked })}
+          {...register("isActive")}
         />
         {t.admin.categoriesView.active}
       </label>
@@ -149,6 +185,7 @@ function CategoryForm({
 }
 
 export function CategoriesTree() {
+  const { confirm, dialog } = useConfirm();
   const { locale, t } = useLang();
   const deleteCategory = useDeleteCategory();
   const { data: categories, isLoading } = useGetAdminCategories();
@@ -190,10 +227,11 @@ export function CategoriesTree() {
               type="button"
               aria-label={t.common.delete}
               onClick={() => {
-                if (!window.confirm(t.admin.confirmDelete)) return;
-                deleteCategory.mutate(
-                  { id: category.id },
-                  { onError: (error) => pushToast(error.message || t.errors.generic, "error") },
+                confirm(t.admin.confirmDelete, () =>
+                  deleteCategory.mutate(
+                    { id: category.id },
+                    { onError: (error) => pushToast(translateError(error, t), "error") },
+                  ),
                 );
               }}
               className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-text-muted hover:text-danger"
@@ -234,6 +272,7 @@ export function CategoriesTree() {
           />
         ) : null}
       </Modal>
+      {dialog}
     </div>
   );
 }

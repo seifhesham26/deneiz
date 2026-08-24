@@ -55,13 +55,13 @@ export function SplitAuthShell({
           </p>
         </div>
 
-        <p className="text-sm text-white/50">
+        <p className="text-sm text-on-media/50">
           © {new Date().getFullYear()} {t.common.storeName}
         </p>
 
         {/* Soft radial glow for depth without a background image dependency */}
         <div className="pointer-events-none absolute -end-32 -top-32 size-96 rounded-full bg-accent/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-40 -start-24 size-96 rounded-full bg-white/5 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-40 -start-24 size-96 rounded-full bg-on-media/5 blur-3xl" />
       </aside>
 
       {/* Form column — div, not main, because pages embed this inside their layout's main */}

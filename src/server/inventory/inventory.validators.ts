@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LOW_STOCK_DEFAULT_THRESHOLD, MAX_PAGE_SIZE } from "@/lib/constants";
 
 const optionalText = (max: number) =>
   z.preprocess(
@@ -20,4 +21,12 @@ export const adjustStockInputSchema = z.object({
 export const stockHistoryInputSchema = z.object({
   productId: z.uuid(),
   limit: z.coerce.number().int().positive().max(48).default(20),
+});
+
+/** Stock listing filters — previously declared inline in the router. */
+export const stockLevelsInputSchema = z.object({
+  search: z.string().trim().optional(),
+  threshold: z.coerce.number().int().min(0).default(LOW_STOCK_DEFAULT_THRESHOLD),
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(20),
 });

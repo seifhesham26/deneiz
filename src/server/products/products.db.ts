@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { containsPattern, escapeLike } from "@/utils/escape-like";
 import { getDb } from "@/db";
 import { categories, productImages, productVariants, products } from "@/db/schema";
 import type { ProductFilters, ProductSortValue } from "./products.validators";
@@ -15,6 +16,11 @@ const coverImageSql = sql<string | null>`(
 type ProductRecord = typeof products.$inferSelect;
 type ProductImageRecord = typeof productImages.$inferSelect;
 type ProductVariantInsert = typeof productVariants.$inferInsert;
+
+/** Whether the product needs variant selection before it can be added to a cart. */
+const hasVariantsSql = sql<boolean>`exists (
+  select 1 from product_variants pv where pv."productId" = ${products.id}
+)`;
 
 const ratingAggregateSql = {
   avgRating: sql<number | null>`(
@@ -59,6 +65,7 @@ export interface ProductListRow {
   categoryNameAr: string | null;
   categorySlug: string | null;
   isFeatured: boolean;
+  hasVariants: boolean;
   createdAt: Date;
 }
 
@@ -77,8 +84,8 @@ export async function listPublishedProducts(filters: ProductFilters): Promise<{
   if (filters.search) {
     conditions.push(
       or(
-        ilike(products.nameEn, `%${filters.search}%`),
-        ilike(products.nameAr, `%${filters.search}%`),
+        ilike(products.nameEn, containsPattern(filters.search)),
+        ilike(products.nameAr, containsPattern(filters.search)),
       ),
     );
   }
@@ -89,7 +96,8 @@ export async function listPublishedProducts(filters: ProductFilters): Promise<{
 
   const where = combineConditions(...conditions);
 
-  const rows = await database
+  const [rows, [{ count }]] = await Promise.all([
+    database
     .select({
       id: products.id,
       slug: products.slug,
@@ -101,6 +109,7 @@ export async function listPublishedProducts(filters: ProductFilters): Promise<{
       isFeatured: products.isFeatured,
       createdAt: products.createdAt,
       coverImageUrl: coverImageSql,
+      hasVariants: hasVariantsSql,
       categoryNameEn: categories.nameEn,
       categoryNameAr: categories.nameAr,
       categorySlug: categories.slug,
@@ -108,15 +117,18 @@ export async function listPublishedProducts(filters: ProductFilters): Promise<{
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
     .where(where)
-    .orderBy(sortClause(filters.sort))
+    // products.id breaks ties: without it, price_asc and top_rated (where every
+    // unreviewed product scores 0) let Postgres reorder between OFFSETs, so
+    // paging repeats some rows and skips others
+    .orderBy(sortClause(filters.sort), asc(products.id))
     .limit(filters.pageSize)
-    .offset((filters.page - 1) * filters.pageSize);
-
-  const [{ count }] = await database
+    .offset((filters.page - 1) * filters.pageSize),
+    database
     .select({ count: sql<number>`count(*)::int` })
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
-    .where(where);
+    .where(where),
+  ]);
 
   return { items: rows, total: count };
 }
@@ -190,6 +202,7 @@ export async function listRelatedProducts(
       isFeatured: products.isFeatured,
       createdAt: products.createdAt,
       coverImageUrl: coverImageSql,
+      hasVariants: hasVariantsSql,
       categoryNameEn: categories.nameEn,
       categoryNameAr: categories.nameAr,
       categorySlug: categories.slug,
@@ -211,13 +224,14 @@ export async function listAllProductsForAdmin(filters: {
   const conditions: (SQL | undefined)[] = [];
   if (filters.search) {
     conditions.push(
-      or(ilike(products.nameEn, `%${filters.search}%`), ilike(products.nameAr, `%${filters.search}%`)),
+      or(ilike(products.nameEn, containsPattern(filters.search)), ilike(products.nameAr, containsPattern(filters.search))),
     );
   }
   if (filters.status) conditions.push(eq(products.status, filters.status));
   const where = combineConditions(...conditions);
 
-  const items = await database
+  const [items, [{ count }]] = await Promise.all([
+    database
     .select({
       id: products.id,
       slug: products.slug,
@@ -237,14 +251,14 @@ export async function listAllProductsForAdmin(filters: {
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
     .where(where)
-    .orderBy(desc(products.createdAt))
+    .orderBy(desc(products.createdAt), asc(products.id))
     .limit(filters.pageSize)
-    .offset((filters.page - 1) * filters.pageSize);
-
-  const [{ count }] = await database
+    .offset((filters.page - 1) * filters.pageSize),
+    database
     .select({ count: sql<number>`count(*)::int` })
     .from(products)
-    .where(where);
+    .where(where),
+  ]);
 
   return { items, total: count };
 }
@@ -276,12 +290,19 @@ export async function getProductById(id: string): Promise<FullProductRecord | nu
   return { product, images, variants };
 }
 
-export async function findSlugsTaken(prefix: string): Promise<string[]> {
+export async function findSlugsTaken(
+  prefix: string,
+  excludeProductId?: string,
+): Promise<string[]> {
   const database = getDb();
   const rows = await database
     .select({ slug: products.slug })
     .from(products)
-    .where(ilike(products.slug, `${prefix}%`));
+    .where(
+      excludeProductId
+        ? and(ilike(products.slug, `${escapeLike(prefix)}%`), ne(products.id, excludeProductId))
+        : ilike(products.slug, `${escapeLike(prefix)}%`),
+    );
   return rows.map((row) => row.slug);
 }
 
@@ -314,7 +335,7 @@ export async function updateFullProduct(
   record: {
     product: Partial<typeof products.$inferInsert>;
     images: Omit<ProductImageInsert, "productId">[];
-    variants: Omit<ProductVariantInsert, "productId">[];
+    variants: (Omit<ProductVariantInsert, "productId"> & { id?: string })[];
     replaceRelations: boolean;
   },
 ): Promise<void> {
@@ -327,19 +348,38 @@ export async function updateFullProduct(
         .where(eq(products.id, id));
     }
 
-    // Images/variants are replaced wholesale — simplest correct model for
-    // drag-reorder editors that always send the full ordered list
     if (record.replaceRelations) {
+      // Images carry no external references, so wholesale replacement is fine
+      // and keeps drag-reorder simple.
       await tx.delete(productImages).where(eq(productImages.productId, id));
-      await tx.delete(productVariants).where(eq(productVariants.productId, id));
-
       if (record.images.length) {
         await tx
           .insert(productImages)
           .values(record.images.map((image, index) => ({ ...image, productId: id, displayOrder: index })));
       }
-      if (record.variants.length) {
-        await tx.insert(productVariants).values(record.variants.map((variant) => ({ ...variant, productId: id })));
+
+      // Variants must be diffed, not replaced: carts persist variantId in
+      // localStorage, and reissuing every id on each save silently drops the
+      // shopper's selection (and its priceDelta) at checkout.
+      const keptIds = record.variants
+        .map((variant) => variant.id)
+        .filter((variantId): variantId is string => Boolean(variantId));
+
+      await tx
+        .delete(productVariants)
+        .where(
+          keptIds.length
+            ? and(eq(productVariants.productId, id), notInArray(productVariants.id, keptIds))
+            : eq(productVariants.productId, id),
+        );
+
+      for (const variant of record.variants) {
+        const { id: variantId, ...values } = variant;
+        if (variantId) {
+          await tx.update(productVariants).set(values).where(eq(productVariants.id, variantId));
+        } else {
+          await tx.insert(productVariants).values({ ...values, productId: id });
+        }
       }
     }
   });
@@ -365,6 +405,8 @@ export async function getProductsByIds(ids: string[]) {
       compareAtPrice: products.compareAtPrice,
       stockQuantity: products.stockQuantity,
       status: products.status,
+      // Order lines snapshot a thumbnail so history renders without a join
+      coverImageUrl: coverImageSql,
     })
     .from(products)
     .where(inArray(products.id, ids));
@@ -388,6 +430,17 @@ export async function getVariantsByIds(ids: string[]) {
     .where(inArray(productVariants.id, ids));
 }
 
+/** True count for the dashboard KPI — listLowStockProducts is capped. */
+export async function countLowStockProducts(threshold: number): Promise<number> {
+  const [{ count }] = await getDb()
+    .select({ count: sql<number>`count(*)::int` })
+    .from(products)
+    .where(
+      and(eq(products.status, "published"), sql`${products.stockQuantity} <= ${threshold}`),
+    );
+  return count;
+}
+
 export async function listLowStockProducts(threshold: number, limit = 10) {
   const database = getDb();
   return database
@@ -402,7 +455,7 @@ export async function listLowStockProducts(threshold: number, limit = 10) {
     .from(products)
     .where(
       and(
-        inArray(products.status, ["published", "draft"]),
+        eq(products.status, "published"),
         sql`${products.stockQuantity} <= ${threshold}`,
       ),
     )

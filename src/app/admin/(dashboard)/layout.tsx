@@ -9,15 +9,17 @@ import { Toaster } from "@/components/ui/toast";
  */
 export default function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
-    <div className="flex min-h-dvh bg-surface">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar />
-        <main className="flex flex-1 flex-col p-4 lg:p-6">
-          <AdminRouteGuard>{children}</AdminRouteGuard>
-        </main>
+    // The guard wraps the chrome too: a signed-in non-admin previously saw the
+    // complete admin navigation framing the "no access" card
+    <AdminRouteGuard>
+      <div className="flex min-h-dvh bg-surface">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar />
+          <main className="flex flex-1 flex-col p-4 lg:p-6">{children}</main>
+        </div>
+        <Toaster />
       </div>
-      <Toaster />
-    </div>
+    </AdminRouteGuard>
   );
 }

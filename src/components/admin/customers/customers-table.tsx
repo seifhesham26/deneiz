@@ -3,9 +3,12 @@
 import { useState } from "react";
 import { useLang } from "@/components/providers/lang-provider";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
+import { ADMIN_PAGE_SIZE } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { pushToast } from "@/components/ui/toast";
+import { translateError } from "@/lib/translate-error";
 import { useDebounce } from "@/hooks/shared/useDebounce";
 import { useGetCustomers } from "@/hooks/admin/useGetCustomers";
 import { useSetCustomerBan } from "@/hooks/admin/useSetCustomerBan";
@@ -16,9 +19,10 @@ export function CustomersTable() {
   const { locale, t } = useLang();
   const setBan = useSetCustomerBan();
   const [searchDraft, setSearchDraft] = useState("");
+  const [page, setPage] = useState(1);
   const search = useDebounce(searchDraft, 300);
 
-  const { data, isLoading } = useGetCustomers({ search });
+  const { data, isLoading } = useGetCustomers({ search, page });
 
   return (
     <div className="flex flex-col gap-4">
@@ -77,7 +81,7 @@ export function CustomersTable() {
                           { id: customer.id, isBanned: !customer.isBanned },
                           {
                             onSuccess: () => pushToast(t.admin.customersView.updated, "success"),
-                            onError: (error) => pushToast(error.message || t.errors.generic, "error"),
+                            onError: (error) => pushToast(translateError(error, t), "error"),
                           },
                         )
                       }
@@ -97,6 +101,13 @@ export function CustomersTable() {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        page={page}
+        pageCount={Math.max(1, Math.ceil((data?.total ?? 0) / ADMIN_PAGE_SIZE))}
+        onPageChange={setPage}
+        className="mt-6"
+      />
     </div>
   );
 }

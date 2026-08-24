@@ -1,13 +1,14 @@
 "use client";
 
 import { trpc } from "@/lib/trpc-client";
-import { useQueryClient } from "@tanstack/react-query";
 
 export function useAdjustStock() {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
   return trpc.inventory.adjust.useMutation({
     onSuccess: () => {
-      void queryClient.invalidateQueries();
+      void utils.inventory.invalidate();
+      void utils.products.invalidate();
+      void utils.analytics.invalidate();
     },
   });
 }

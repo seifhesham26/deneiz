@@ -26,11 +26,19 @@
   --color-text-muted: #9ca3af;
   --color-text-inverse: #ffffff;
 
+  /* Focus indicator rides on text-primary so it inverts with the theme */
+  --color-focus-ring: #111111;
+
   /* Semantic */
   --color-success: #16a34a;
-  --color-warning: #d97706;
+  --color-warning: #b45309;
   --color-danger: #dc2626;
   --color-info: #2563eb;
+
+  /* Fixed-polarity tokens: these sit on photography or on the always-dark
+     admin sidebar, so they must NOT flip with the theme. No dark override. */
+  --color-scrim: #000000;
+  --color-on-media: #ffffff;
 
   /* Admin-specific */
   --color-admin-sidebar: #111827;
@@ -52,6 +60,14 @@
   --color-text-primary: #fafafa;
   --color-text-secondary: #a1a1aa;
   --color-text-muted: #71717a;
+  /* Was inheriting #ffffff — white on the #fafafa primary is ~1.04:1 */
+  --color-text-inverse: #09090b;
+  --color-focus-ring: #fafafa;
+
+  /* Light-tuned semantics fail AA on a near-black ground: danger 4.1:1, info 3.9:1 */
+  --color-danger: #f87171;
+  --color-info: #60a5fa;
+  --color-warning: #fbbf24;
 
   /* Admin surfaces stay dark in both themes */
   --color-admin-sidebar: #0b1220;
@@ -76,11 +92,15 @@
   --color-text-secondary: var(--color-text-secondary);
   --color-text-muted: var(--color-text-muted);
   --color-text-inverse: var(--color-text-inverse);
+  --color-focus-ring: var(--color-focus-ring);
 
   --color-success: var(--color-success);
   --color-warning: var(--color-warning);
   --color-danger: var(--color-danger);
   --color-info: var(--color-info);
+
+  --color-scrim: var(--color-scrim);
+  --color-on-media: var(--color-on-media);
 
   --color-admin-sidebar: var(--color-admin-sidebar);
   --color-admin-surface: var(--color-admin-surface);
@@ -104,7 +124,7 @@
   --text-hero: clamp(2.5rem, 8vw, 5rem);
 
   /* Fluid section spacing — usable as py-section-y */
-  --spacing-section-y: clamp(3.5rem, 9vh, 7.5rem);
+  --spacing-section-y: clamp(3.5rem, 9dvh, 7.5rem);
 
   /* Horizontal page gutter — the only source of inline page padding */
   --spacing-gutter: clamp(1rem, 4vw, 2.5rem);
@@ -142,8 +162,41 @@
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
+  }
+}
+
+@layer base {
+  /* Page transition as CSS, not JS: framer-motion server-rendered the whole
+     page at opacity 0, so a failed or slow bundle left it invisible. */
+  @keyframes page-enter {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+  }
+
+  .page-enter {
+    animation: page-enter 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    .page-enter {
+      animation: none;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 

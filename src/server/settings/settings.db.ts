@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { settings, users, userRoleEnum } from "@/db/schema";
 
@@ -18,7 +18,27 @@ export async function getSettings(): Promise<StoreSettings> {
 
   if (created) return created;
   const [fallback] = await database.select().from(settings).limit(1);
+  // A concurrent insert always leaves a row; throwing beats returning undefined
+  // through a signature that promises StoreSettings
+  if (!fallback) throw new Error("Store settings row could not be materialized");
   return fallback;
+}
+
+export async function countSuperAdmins(): Promise<number> {
+  const [{ count }] = await getDb()
+    .select({ count: sql<number>`count(*)::int` })
+    .from(users)
+    .where(eq(users.role, "super_admin"));
+  return count;
+}
+
+export async function getUserRole(userId: string): Promise<string | undefined> {
+  const [row] = await getDb()
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.role;
 }
 
 export async function updateSettings(

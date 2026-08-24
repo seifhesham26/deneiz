@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { pushToast } from "@/components/ui/toast";
+import { translateError } from "@/lib/translate-error";
 import { useCreateBanner } from "@/hooks/admin/useCreateBanner";
 import { useUpdateBanner } from "@/hooks/admin/useUpdateBanner";
 
@@ -64,7 +65,7 @@ export function BannerForm({ initialValues, onDone }: BannerFormProps) {
             pushToast(t.admin.bannersView.updated, "success");
             onDone();
           },
-          onError: (error) => pushToast(error.message || t.errors.generic, "error"),
+          onError: (error) => pushToast(translateError(error, t), "error"),
         },
       );
       return;
@@ -77,7 +78,7 @@ export function BannerForm({ initialValues, onDone }: BannerFormProps) {
           pushToast(t.admin.bannersView.created, "success");
           onDone();
         },
-        onError: (error) => pushToast(error.message || t.errors.generic, "error"),
+        onError: (error) => pushToast(translateError(error, t), "error"),
       },
     );
   }

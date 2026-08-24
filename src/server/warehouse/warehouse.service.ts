@@ -1,5 +1,8 @@
+import { appError } from "../app-error";
 import {
   createStorageLocation,
+  getStorageLocation,
+  sumLocationQuantity,
   listAssignments,
   listStorageLocations,
   upsertAssignment,
@@ -15,20 +18,18 @@ export async function assignProductToLocation(record: {
   productId: string;
   quantity: number;
 }): Promise<void> {
-  const locations = await listStorageLocations();
-  const target = locations.find((location) => location.id === record.locationId);
-  if (!target) throw new Error("Location not found");
-
-  const existingAssignment = await listAssignments();
-  const alreadyStored =
-    existingAssignment
-      .filter((assignment) => assignment.locationId === record.locationId && assignment.productId !== record.productId)
-      .reduce((sum, assignment) => sum + assignment.quantity, 0);
+  // One location and one SUM, not two full table scans filtered in JS
+  const [target, alreadyStored] = await Promise.all([
+    getStorageLocation(record.locationId),
+    sumLocationQuantity(record.locationId, record.productId),
+  ]);
+  if (!target) throw appError("NOT_FOUND", "locationNotFound");
 
   if (alreadyStored + record.quantity > target.capacity) {
-    throw new Error(
-      `Capacity exceeded — ${target.capacity - alreadyStored} unit(s) free at ${locationLabel(target)}`,
-    );
+    throw appError("CONFLICT", "capacityExceeded", {
+      free: target.capacity - alreadyStored,
+      location: locationLabel(target),
+    });
   }
 
   await upsertAssignment(record);

@@ -12,6 +12,7 @@ import { ProductImages } from "./product-images";
 import { VariantPicker } from "./variant-picker";
 import { useCartStore } from "@/store/cart.store";
 import { useWishlistStore } from "@/store/wishlist.store";
+import { useIsHydrated } from "@/hooks/shared/useIsHydrated";
 import { calculateDiscountPercent } from "@/utils/calculate-discount";
 import { formatCurrency } from "@/utils/format-currency";
 import type { ProductDetail } from "@/types/api";
@@ -33,9 +34,13 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   const { locale, t } = useLang();
   const addItem = useCartStore((state) => state.addItem);
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
+  const isHydrated = useIsHydrated();
   const isInWishlist = useWishlistStore((state) =>
     state.entries.some((entry) => entry.productId === product.id),
   );
+  // The persisted store rehydrates after SSR — showing the true state before
+  // then would mismatch the server-rendered (always empty) wishlist
+  const showWishlisted = isHydrated && isInWishlist;
 
   const firstAvailable = useMemo(
     () => product.variants.find((variant) => variant.stockQuantity > 0) ?? null,
@@ -89,7 +94,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           <>
             <span aria-hidden> / </span>
             <Link
-              href={`/products?category=${product.categorySlug}`}
+              href={`/products?categorySlug=${product.categorySlug}`}
               className="hover:text-text-secondary"
             >
               {categoryName}
@@ -197,7 +202,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                 <Heart
                   aria-hidden
                   className={`size-5 transition-transform active:scale-90 ${
-                    isInWishlist ? "fill-danger text-danger" : "text-text-secondary"
+                    showWishlisted ? "fill-danger text-danger" : "text-text-secondary"
                   }`}
                 />
               </button>

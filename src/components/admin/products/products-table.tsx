@@ -6,34 +6,43 @@ import Link from "next/link";
 import { Pencil, Trash2 } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
+import { ADMIN_PAGE_SIZE } from "@/lib/constants";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { pushToast } from "@/components/ui/toast";
 import { useDebounce } from "@/hooks/shared/useDebounce";
 import { useGetAdminProducts } from "@/hooks/admin/useGetAdminProducts";
-import { useDeleteProduct } from "@/hooks/admin/useDeleteProduct";
+import { useArchiveProduct } from "@/hooks/admin/useArchiveProduct";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { translateError } from "@/lib/translate-error";
 import { formatCurrency } from "@/utils/format-currency";
 
 type StatusFilter = "" | "draft" | "published" | "archived";
 
 export function ProductsTable() {
+  const { confirm, dialog } = useConfirm();
   const { locale, t } = useLang();
-  const deleteProduct = useDeleteProduct();
+  const archiveProduct = useArchiveProduct();
 
   const [searchDraft, setSearchDraft] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+  const [page, setPage] = useState(1);
   const search = useDebounce(searchDraft, 300);
 
-  const { data, isLoading } = useGetAdminProducts({ search, page: 1 });
+  const { data, isLoading } = useGetAdminProducts({ search, page });
 
-  function handleDelete(id: string) {
-    if (!window.confirm(t.admin.confirmDelete)) return;
-    deleteProduct.mutate(
-      { id },
-      {
-        onSuccess: () => pushToast(t.common.saved, "success"),
-        onError: (error) => pushToast(error.message || t.errors.generic, "error"),
-      },
+  // Archive, not delete: a hard delete cascades away the product's stock ledger
+  // and reviews. Irreversible removal is a super-admin-only procedure.
+  function handleArchive(id: string) {
+    confirm(t.admin.confirmArchive, () =>
+      archiveProduct.mutate(
+        { id },
+        {
+          onSuccess: () => pushToast(t.common.saved, "success"),
+          onError: (error) => pushToast(translateError(error, t), "error"),
+        },
+      ),
     );
   }
 
@@ -116,7 +125,7 @@ export function ProductsTable() {
                             : "neutral"
                       }
                     >
-                      {(t.statuses.productStatus as Record<string, string>)[product.status]}
+                      {t.statuses.productStatus[product.status]}
                     </Badge>
                   </td>
                   <td className="p-3">
@@ -130,8 +139,8 @@ export function ProductsTable() {
                       </Link>
                       <button
                         type="button"
-                        aria-label={t.common.delete}
-                        onClick={() => handleDelete(product.id)}
+                        aria-label={t.admin.archive}
+                        onClick={() => handleArchive(product.id)}
                         className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-text-muted hover:text-danger"
                       >
                         <Trash2 aria-hidden className="size-4" />
@@ -144,6 +153,14 @@ export function ProductsTable() {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        page={page}
+        pageCount={Math.max(1, Math.ceil((data?.total ?? 0) / ADMIN_PAGE_SIZE))}
+        onPageChange={setPage}
+        className="mt-6"
+      />
+      {dialog}
     </div>
   );
 }

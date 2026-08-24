@@ -1,10 +1,11 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
 import { Button } from "@/components/ui/button";
 import { pushToast } from "@/components/ui/toast";
 import { useLang } from "@/components/providers/lang-provider";
@@ -15,6 +16,10 @@ import { useGetMyOrders } from "@/hooks/storefront/useGetMyOrders";
 import { formatCurrency } from "@/utils/format-currency";
 import { formatDate } from "@/utils/format-date";
 import type { Dictionary } from "@/lib/dictionary";
+import { ADMIN_ROLES } from "@/lib/constants";
+
+/** Mirrors myOrdersFiltersSchema's default page size. */
+const MY_ORDERS_PAGE_SIZE = 10;
 
 const STATUS_TONES = {
   pending: "warning",
@@ -31,8 +36,7 @@ function orderStatusTone(status: string) {
 }
 
 function translateStatus(status: string, t: Dictionary): string {
-  const map = t.statuses.order as Record<string, string>;
-  return map[status] ?? status;
+  return t.statuses.order[status as keyof Dictionary["statuses"]["order"]] ?? status;
 }
 
 function AccountPageContent() {
@@ -43,13 +47,19 @@ function AccountPageContent() {
 
   // The proxy sends bounced admins here with ?next=/admin — same-origin only
   const rawNext = searchParams.get("next") ?? "/account";
-  const nextPath = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/account";
+  // Reject "//host" and "/\host" alike — browsers normalise the backslash form
+  // into a protocol-relative URL, which would make this an open redirect
+  const nextPath = /^\/(?![/\\])/.test(rawNext) ? rawNext : "/account";
 
   const { user, isLoading } = useGetSessionUser();
-  const myOrders = useGetMyOrders();
+  const [ordersPage, setOrdersPage] = useState(1);
+  const myOrders = useGetMyOrders(ordersPage, Boolean(user));
 
   async function handleSignOut() {
     await authClient.signOut();
+    // Without this the cached auth.me keeps rendering the user's name, email
+    // and order history until something else forces a refetch
+    await queryClient.invalidateQueries();
     pushToast(t.account.signOut, "info");
   }
 
@@ -90,9 +100,10 @@ function AccountPageContent() {
           {myOrders.isLoading ? (
             <p className="text-sm text-text-secondary">{t.common.loading}</p>
           ) : myOrders.data && myOrders.data.items.length > 0 ? (
-            <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface-raised">
-              {myOrders.data.items.map((order) => (
-                <li
+            <>
+              <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface-raised">
+                {myOrders.data.items.map((order) => (
+                  <li
                   key={order.id}
                   className="grid items-center gap-3 p-4 text-sm"
                   style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))" }}
@@ -103,14 +114,22 @@ function AccountPageContent() {
                   <span className="text-text-secondary">{formatDate(order.createdAt, locale)}</span>
                   <Badge tone={orderStatusTone(order.status)}>{translateStatus(order.status, t)}</Badge>
                   <Badge tone={order.paymentStatus === "collected" ? "success" : "neutral"}>
-                    {(t.statuses.payment as Record<string, string>)[order.paymentStatus] ?? order.paymentStatus}
+                    {t.statuses.payment[order.paymentStatus] ?? order.paymentStatus}
                   </Badge>
                   <span className="font-semibold lg:text-end">
                     {formatCurrency(order.total, locale)}
                   </span>
                 </li>
               ))}
-            </ul>
+              </ul>
+
+              <Pagination
+                page={ordersPage}
+                pageCount={Math.max(1, Math.ceil((myOrders.data?.total ?? 0) / MY_ORDERS_PAGE_SIZE))}
+                onPageChange={setOrdersPage}
+                className="mt-2"
+              />
+            </>
           ) : (
             <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-surface-raised p-10 text-center">
               <p className="text-sm text-text-secondary">{t.cart.empty}</p>
@@ -121,7 +140,7 @@ function AccountPageContent() {
           )}
         </section>
 
-        {(user.role === "super_admin" || user.role === "manager" || user.role === "staff") && (
+        {ADMIN_ROLES.includes(user.role) && (
           <Link href="/admin" className="self-start text-sm font-medium text-accent hover:underline">
             → {t.nav.adminPanel}
           </Link>

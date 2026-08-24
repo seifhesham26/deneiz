@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { create } from "zustand";
 import { useIsHydrated } from "@/hooks/shared/useIsHydrated";
 
@@ -46,22 +46,30 @@ const TONE_CLASSES = {
 
 export function Toaster() {
   const isHydrated = useIsHydrated();
+  const reduceMotion = useReducedMotion();
   const toasts = useToastStore((state) => state.toasts);
   const dismissToast = useToastStore((state) => state.dismissToast);
 
   if (!isHydrated) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex flex-col items-center gap-2 sm:inset-x-auto sm:end-6">
+    <div
+      // Toasts are the only feedback channel for cart, checkout and every admin
+      // mutation, so they must be announced rather than only drawn
+      role="status"
+      aria-live="polite"
+      aria-atomic={false}
+      className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex flex-col items-center gap-2 sm:inset-x-auto sm:end-6"
+    >
       <AnimatePresence>
         {toasts.map((toast) => (
           <motion.button
             key={toast.id}
             type="button"
             onClick={() => dismissToast(toast.id)}
-            initial={{ opacity: 0, y: 16 }}
+            initial={reduceMotion ? false : { opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
             className={`pointer-events-auto max-w-md rounded-full px-4 py-2.5 text-sm shadow-lg ${TONE_CLASSES[toast.tone]}`}
           >
             {toast.message}

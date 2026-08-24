@@ -14,6 +14,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
 ) {
   const generatedId = useId();
   const selectId = id ?? generatedId;
+  const errorId = `${selectId}-error`;
 
   return (
     <div className="flex w-full flex-col gap-1">
@@ -26,9 +27,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         ref={ref}
         id={selectId}
         aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
         className={cn(
           "min-h-11 w-full rounded-lg border border-border bg-surface-raised px-3 text-sm text-text-primary",
-          "focus:border-accent focus:outline-none",
+          "focus:border-accent",
           error && "border-danger",
           className,
         )}
@@ -36,7 +38,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       >
         {children}
       </select>
-      {error ? <p className="text-xs text-danger">{error}</p> : null}
+      {error ? (
+        <p id={errorId} className="text-xs text-danger" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 });

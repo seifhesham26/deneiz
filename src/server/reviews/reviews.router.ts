@@ -1,4 +1,5 @@
-import { publicProcedure, adminProcedure, router } from "../trpc";
+import { publicProcedure, adminProcedure, requireRoles, router } from "../trpc";
+import { DESTRUCTIVE_ROLES } from "@/lib/constants";
 import { z } from "zod";
 import {
   createReviewInputSchema,
@@ -27,7 +28,12 @@ export const reviewsRouter = router({
 
   create: publicProcedure.input(createReviewInputSchema).mutation(({ input, ctx }) => {
     // Client key: prefer the account, fall back to IP for guests
-    return submitReview({ ...input, clientKey: ctx.user?.id ?? ctx.clientIp });
+    return submitReview({
+      ...input,
+      clientKey: ctx.user?.id ?? ctx.clientIp,
+      userId: ctx.user?.id ?? null,
+      accountName: ctx.user?.name ?? null,
+    });
   }),
 
   getAll: adminProcedure.input(adminReviewsQuerySchema).query(({ input }) => {
@@ -42,7 +48,7 @@ export const reviewsRouter = router({
     .input(reviewIdInputSchema.extend({ isFlagged: z.boolean() }))
     .mutation(({ input }) => setReviewFlagged(input.id, input.isFlagged)),
 
-  delete: adminProcedure.input(reviewIdInputSchema).mutation(({ input }) => {
+  delete: requireRoles(DESTRUCTIVE_ROLES).input(reviewIdInputSchema).mutation(({ input }) => {
     return deleteReview(input.id);
   }),
 });

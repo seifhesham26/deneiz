@@ -1,5 +1,6 @@
 import { slugify } from "@/utils/slugify";
 import {
+  countChildren,
   countProductsInCategory,
   deleteCategory,
   findCategorySlugMatches,
@@ -8,6 +9,7 @@ import {
   updateCategory,
 } from "./categories.db";
 import { CATEGORY_MAX_DEPTH } from "./categories.validators";
+import { appError } from "../app-error";
 
 export async function resolveUniqueCategorySlug(
   requested: string | undefined,
@@ -26,13 +28,22 @@ export async function resolveUniqueCategorySlug(
  * Depth guard keeps the tree renderable as two levels (parent → child).
  * A child category can never become a parent itself.
  */
-export async function assertParentDepthAllowed(parentId: string | null | undefined): Promise<void> {
+export async function assertParentDepthAllowed(
+  parentId: string | null | undefined,
+  movingCategoryId?: string,
+): Promise<void> {
   if (!parentId) return;
 
+  // Checking only the chosen parent is not enough: giving C a child D and then
+  // re-parenting C under P yields P -> C -> D, one level deeper than the tree renders
+  if (movingCategoryId && (await countChildren(movingCategoryId)) > 0) {
+    throw appError("BAD_REQUEST", "categoryHasChildren");
+  }
+
   const parent = await getCategoryById(parentId);
-  if (!parent) throw new Error("Parent category not found");
+  if (!parent) throw appError("NOT_FOUND", "categoryNotFound");
   if (parent.parentId !== null) {
-    throw new Error(`Categories support a maximum depth of ${CATEGORY_MAX_DEPTH}`);
+    throw appError("BAD_REQUEST", "categoryMaxDepth", { max: CATEGORY_MAX_DEPTH });
   }
 }
 
@@ -67,8 +78,8 @@ export async function editCategory(
   }>,
 ) {
   if ("parentId" in command) {
-    if (command.parentId === id) throw new Error("A category cannot be its own parent");
-    await assertParentDepthAllowed(command.parentId);
+    if (command.parentId === id) throw appError("BAD_REQUEST", "categoryOwnParent");
+    await assertParentDepthAllowed(command.parentId, id);
   }
   await updateCategory(id, command);
 }
@@ -78,7 +89,7 @@ export async function removeCategory(id: string): Promise<void> {
   // product cards in the storefront navigation
   const productCount = await countProductsInCategory(id);
   if (productCount > 0) {
-    throw new Error(`Reassign ${productCount} product(s) before deleting this category`);
+    throw appError("CONFLICT", "categoryHasProducts", { count: productCount });
   }
   await deleteCategory(id);
 }

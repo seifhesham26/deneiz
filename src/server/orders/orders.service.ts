@@ -1,9 +1,13 @@
-import { ORDER_NUMBER_PREFIX } from "@/lib/constants";
+import { randomInt } from "node:crypto";
+import { ORDER_NUMBER_PREFIX, STORE_TIMEZONE } from "@/lib/constants";
 import { sendOrderConfirmationEmail } from "@/lib/resend";
+import { normalizePhoneNumber } from "@/utils/normalize-phone";
 import { adjustStock } from "../inventory/inventory.db";
+import { appError } from "../app-error";
 import { getSettings } from "@/server/settings/settings.db";
 import { upsertCustomerByPhone, isCustomerBannedByPhone } from "../customers/customers.db";
 import { getProductsByIds, getVariantsByIds } from "../products/products.db";
+import { calculateShipping } from "@/utils/calculate-shipping";
 import {
   listOrdersForAdmin,
   listOrdersForUser,
@@ -18,53 +22,125 @@ import type { createOrderInputSchema } from "./orders.validators";
 
 type CreateOrderInput = z.output<typeof createOrderInputSchema>;
 
+type OrderStatus = "pending" | "processing" | "shipped" | "delivered" | "cancelled";
+
 const ORDER_NUMBER_ATTEMPTS = 5;
+const ORDER_NUMBER_TAIL_LENGTH = 4;
+const BASE36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/**
+ * Which status changes are legal. Without this an admin can move a delivered
+ * order back to pending, or un-cancel an order without re-deducting the stock
+ * that cancellation returned — inventory drifts with no trace.
+ */
+const ALLOWED_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
+  pending: ["processing", "cancelled"],
+  processing: ["shipped", "cancelled"],
+  shipped: ["delivered", "cancelled"],
+  delivered: [],
+  cancelled: [],
+};
 
 /** DNZ-YYYYMMDD-XXXX — date part aids phone support, random tail avoids collisions. */
 async function generateOrderNumber(): Promise<string> {
-  const datePart = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+  // Store-local date: an order placed at 01:00 Cairo belongs to that day, not
+  // to the previous UTC one. en-CA renders as YYYY-MM-DD.
+  const datePart = new Intl.DateTimeFormat("en-CA", { timeZone: STORE_TIMEZONE })
+    .format(new Date())
+    .replaceAll("-", "");
+
   for (let attempt = 0; attempt < ORDER_NUMBER_ATTEMPTS; attempt += 1) {
-    const tail = Math.random().toString(36).slice(2, 6).toUpperCase();
+    // randomInt, not Math.random: order numbers are quoted over the phone and
+    // must not be guessable from a neighbouring order
+    let tail = "";
+    for (let index = 0; index < ORDER_NUMBER_TAIL_LENGTH; index += 1) {
+      tail += BASE36[randomInt(BASE36.length)];
+    }
     const candidate = `${ORDER_NUMBER_PREFIX}-${datePart}-${tail}`;
     if (!(await isOrderNumberTaken(candidate))) return candidate;
   }
-  throw new Error("Could not allocate a unique order number");
+  throw appError("INTERNAL_SERVER_ERROR", "orderNumberFailed");
 }
 
 export async function placeOrder(input: CreateOrderInput, userId: string | null) {
-  const banned = await isCustomerBannedByPhone(input.phoneNumber);
-  if (banned) throw new Error("This phone number cannot place orders");
+  const canonicalPhone = normalizePhoneNumber(input.phoneNumber);
+  const variantIds = input.items
+    .map((item) => item.variantId)
+    .filter((id): id is string => Boolean(id));
 
-  // Prices always come from the database — the client cart is untrusted
-  const productRows = await getProductsByIds(input.items.map((item) => item.productId));
+  // These four reads are independent; neon runs each as its own round trip, so
+  // serialising them would add three needless hops to the checkout critical path
+  const [banned, productRows, variantRows, settingsRow] = await Promise.all([
+    isCustomerBannedByPhone(canonicalPhone),
+    getProductsByIds(input.items.map((item) => item.productId)),
+    getVariantsByIds(variantIds),
+    getSettings(),
+  ]);
+
+  if (banned) throw appError("FORBIDDEN", "customerBanned");
+
   const productMap = new Map(productRows.map((row) => [row.id, row]));
-
-  const variantRows = await getVariantsByIds(
-    input.items.filter((item) => item.variantId).map((item) => item.variantId!),
-  );
   const variantMap = new Map(variantRows.map((row) => [row.id, row]));
+
+  // Cart lines are keyed product+variant, so one product legitimately appears
+  // on several lines. Availability must be judged on the sum, not per line,
+  // or two lines of three units each pass against a stock of three.
+  const requestedPerProduct = new Map<string, number>();
+  for (const item of input.items) {
+    requestedPerProduct.set(
+      item.productId,
+      (requestedPerProduct.get(item.productId) ?? 0) + item.quantity,
+    );
+  }
+
+  for (const [productId, quantity] of requestedPerProduct) {
+    const product = productMap.get(productId);
+    if (!product) throw appError("BAD_REQUEST", "productMissing");
+    if (product.status !== "published") {
+      throw appError("CONFLICT", "productUnavailable", { name: product.nameEn });
+    }
+    if (product.stockQuantity < quantity) {
+      throw appError("CONFLICT", "stockOnly", {
+        count: product.stockQuantity,
+        name: product.nameEn,
+      });
+    }
+  }
+
+  // Variant stock is a separate column; enforce it on the same aggregated basis
+  const requestedPerVariant = new Map<string, number>();
+  for (const item of input.items) {
+    if (!item.variantId) continue;
+    requestedPerVariant.set(
+      item.variantId,
+      (requestedPerVariant.get(item.variantId) ?? 0) + item.quantity,
+    );
+  }
+
+  for (const [variantId, quantity] of requestedPerVariant) {
+    const variant = variantMap.get(variantId);
+    // An unknown or foreign variant is dropped rather than rejected — the base
+    // product line still stands, matching the previous ownership check
+    if (!variant) continue;
+    if (variant.stockQuantity < quantity) {
+      const product = productMap.get(variant.productId);
+      throw appError("CONFLICT", "stockOnly", {
+        count: variant.stockQuantity,
+        name: product?.nameEn ?? "",
+      });
+    }
+  }
 
   let subtotal = 0;
   const items = input.items.map((item) => {
     const product = productMap.get(item.productId);
-    if (!product) throw new Error("A product in your cart no longer exists");
-    if (product.status !== "published") throw new Error(`"${product.nameEn}" is not available`);
+    if (!product) throw appError("BAD_REQUEST", "productMissing");
 
     // A claimed variant must belong to this product — otherwise ignore it
     const variant = item.variantId ? variantMap.get(item.variantId) : undefined;
-    const validVariant =
-      variant && variant.productId === product.id
-        ? variant
-        : undefined;
+    const validVariant = variant && variant.productId === product.id ? variant : undefined;
 
-    // PROTOTYPE: stock is enforced per product; per-variant stock enforcement lands with the warehouse pick-list work
-    if (product.stockQuantity < item.quantity) {
-      throw new Error(`Only ${product.stockQuantity} left of "${product.nameEn}"`);
-    }
-
-    const unitPrice = Math.round(
-      (product.price + (validVariant?.priceDelta ?? 0)) * 100,
-    ) / 100;
+    const unitPrice = Math.round((product.price + (validVariant?.priceDelta ?? 0)) * 100) / 100;
     const lineTotal = Math.round(unitPrice * item.quantity * 100) / 100;
     subtotal += lineTotal;
 
@@ -76,7 +152,7 @@ export async function placeOrder(input: CreateOrderInput, userId: string | null)
       productId: product.id,
       productNameEn: product.nameEn,
       productNameAr: product.nameAr,
-      imageUrl: null as string | null,
+      imageUrl: product.coverImageUrl,
       variantLabel: labelParts.length > 0 ? labelParts : null,
       unitPrice,
       quantity: item.quantity,
@@ -84,40 +160,39 @@ export async function placeOrder(input: CreateOrderInput, userId: string | null)
     };
   });
 
-  const settingsRow = await getSettings();
-  const shippingFee =
-    subtotal >= settingsRow.freeShippingThreshold ? 0 : settingsRow.shippingFee;
+  const shippingFee = calculateShipping(subtotal, settingsRow);
   const total = Math.round((subtotal + shippingFee) * 100) / 100;
 
   const customer = await upsertCustomerByPhone({
     fullName: input.fullName,
-    phoneNumber: input.phoneNumber,
+    phoneNumber: canonicalPhone,
     city: input.city,
+    email: input.email ?? null,
+    userId,
   });
 
   const orderNumber = await generateOrderNumber();
-  const order = await placeOrderAtomic(
-    {
-      orderNumber,
-      userId,
-      customerId: customer.id,
-      fullName: input.fullName,
-      phoneNumber: input.phoneNumber,
-      addressLine1: input.addressLine1,
-      city: input.city,
-      notes: input.notes ?? null,
-      subtotal,
-      shippingFee,
-      total,
-      locale: input.locale,
-      items,
-    },
-  );
+  const order = await placeOrderAtomic({
+    orderNumber,
+    userId,
+    customerId: customer.id,
+    fullName: input.fullName,
+    // Snapshot keeps what the customer typed; the customer row holds the key
+    phoneNumber: input.phoneNumber,
+    addressLine1: input.addressLine1,
+    city: input.city,
+    notes: input.notes ?? null,
+    subtotal,
+    shippingFee,
+    total,
+    locale: input.locale,
+    items,
+  });
 
   // Fire-and-forget: confirmation email must never block the checkout response
   void sendOrderConfirmationEmail({
     orderNumber: order.orderNumber,
-    recipientEmail: customer.email,
+    recipientEmail: input.email ?? customer.email,
     total: order.total,
   });
 
@@ -130,11 +205,12 @@ export async function placeOrder(input: CreateOrderInput, userId: string | null)
  */
 export async function cancelAndRestock(orderId: string) {
   const record = await getOrderWithItems(orderId);
-  if (!record) throw new Error("Order not found");
+  if (!record) throw appError("NOT_FOUND", "orderNotFound");
   if (record.status === "cancelled") return;
   if (record.paymentStatus === "collected") {
-    throw new Error("Collected orders must be refunded before cancellation");
+    throw appError("CONFLICT", "orderCollectedCannotCancel");
   }
+  assertTransitionAllowed(record.status, "cancelled");
 
   for (const item of record.items) {
     if (!item.productId) continue;
@@ -150,7 +226,17 @@ export async function cancelAndRestock(orderId: string) {
   await persistOrderStatus(orderId, "cancelled");
 }
 
-export async function changeOrderStatus(orderId: string, status: CreateStatusValue) {
+function assertTransitionAllowed(from: OrderStatus, to: OrderStatus): void {
+  if (from === to) return;
+  if (!ALLOWED_TRANSITIONS[from].includes(to)) {
+    throw appError("CONFLICT", "invalidStatusTransition", { from, to });
+  }
+}
+
+export async function changeOrderStatus(orderId: string, status: OrderStatus) {
+  const record = await getOrderWithItems(orderId);
+  if (!record) throw appError("NOT_FOUND", "orderNotFound");
+  assertTransitionAllowed(record.status, status);
   await persistOrderStatus(orderId, status);
 }
 
@@ -158,13 +244,20 @@ export async function changePaymentStatus(
   orderId: string,
   paymentStatus: "pending" | "collected" | "refunded",
 ) {
+  const record = await getOrderWithItems(orderId);
+  if (!record) throw appError("NOT_FOUND", "orderNotFound");
+  // A cancelled order can be refunded but never newly collected
+  if (record.status === "cancelled" && paymentStatus === "collected") {
+    throw appError("CONFLICT", "invalidStatusTransition", {
+      from: record.status,
+      to: paymentStatus,
+    });
+  }
   await persistPaymentStatus(orderId, paymentStatus);
 }
 
-type CreateStatusValue = "pending" | "processing" | "shipped" | "delivered" | "cancelled";
-
 export async function listOrders(filters: {
-  status?: CreateStatusValue;
+  status?: OrderStatus;
   search?: string;
   page: number;
   pageSize: number;

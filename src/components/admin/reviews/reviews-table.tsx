@@ -4,8 +4,11 @@ import { useState } from "react";
 import { Flag, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
+import { ADMIN_PAGE_SIZE } from "@/lib/constants";
 import { Select } from "@/components/ui/select";
 import { pushToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   useDeleteReview,
   useModerateReview,
@@ -15,13 +18,16 @@ import { useGetAdminReviews } from "@/hooks/admin/useGetAdminReviews";
 import { formatDateTime } from "@/utils/format-date";
 
 export function ReviewsTable() {
+  const { confirm, dialog } = useConfirm();
   const { locale, t } = useLang();
   const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
   const moderate = useModerateReview();
   const setFlagged = useSetReviewFlagged();
   const remove = useDeleteReview();
 
   const { data, isLoading } = useGetAdminReviews({
+    page,
     status: statusFilter === "" ? undefined : (statusFilter as "pending" | "approved" | "rejected"),
   });
 
@@ -131,8 +137,9 @@ export function ReviewsTable() {
                         type="button"
                         aria-label={t.common.delete}
                         onClick={() => {
-                          if (!window.confirm(t.admin.confirmDelete)) return;
-                          remove.mutate({ id: review.id });
+                          confirm(t.admin.confirmDelete, () =>
+                            remove.mutate({ id: review.id }),
+                          );
                         }}
                         className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-text-muted hover:text-danger"
                       >
@@ -152,6 +159,14 @@ export function ReviewsTable() {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        page={page}
+        pageCount={Math.max(1, Math.ceil((data?.total ?? 0) / ADMIN_PAGE_SIZE))}
+        onPageChange={setPage}
+        className="mt-6"
+      />
+      {dialog}
     </div>
   );
 }

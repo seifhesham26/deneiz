@@ -26,7 +26,10 @@ export const banners = pgTable("banners", {
   startsAt: timestamp("startsAt", { withTimezone: true }),
   endsAt: timestamp("endsAt", { withTimezone: true }),
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });
 
 /** Single-row store configuration; id stays fixed so upserts target it. */
@@ -43,5 +46,8 @@ export const settings = pgTable("settings", {
   shippingFee: money("shippingFee").notNull().default(25),
   freeShippingThreshold: money("freeShippingThreshold").notNull().default(300),
   lowStockThreshold: integer("lowStockThreshold").notNull().default(5),
-  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });

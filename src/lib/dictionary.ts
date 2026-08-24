@@ -1,5 +1,8 @@
 import type { Locale } from "@/types/shared";
 
+/** Params a thrown error key carries — see server/app-error.ts. */
+export type ErrorParams = Record<string, string | number>;
+
 /**
  * Every user-visible string lives here with its Arabic and English variant.
  * Components consume it through useLang().t — never hardcode copy in JSX.
@@ -103,6 +106,8 @@ const en = {
     empty: "Your wishlist is empty",
     emptyCta: "Browse the shop",
     moveToCart: "Move to cart",
+    add: "Add to wishlist",
+    remove: "Remove from wishlist",
   },
   cart: {
     title: "Your cart",
@@ -122,6 +127,7 @@ const en = {
     contactInfo: "Delivery details",
     fullName: "Full name",
     phoneNumber: "Phone number",
+    email: "Email",
     addressLine1: "Address",
     city: "City",
     notes: "Order notes",
@@ -227,6 +233,8 @@ const en = {
     addNew: "Add new",
     searchPlaceholder: "Search…",
     confirmDelete: "Delete this permanently?",
+    archive: "Archive",
+    confirmArchive: "Archive this product? It stays in reports and order history.",
     login: {
       title: "Sign in to the admin panel",
       subtitle: "Management access for the Deneiz team only",
@@ -364,6 +372,7 @@ const en = {
       topProducts: "Top selling products",
       revenueByCategory: "Revenue by category",
       trafficSources: "Traffic sources",
+      trafficPending: "Traffic analytics are not connected yet.",
       unitsSold: "Units sold",
       revenue: "Revenue",
       daily: "Daily",
@@ -393,15 +402,53 @@ const en = {
       onlySuperAdmin: "Only super admins can manage settings",
     },
   },
+  /**
+   * Keys here are the wire format for every failure — services throw the key
+   * (see server/app-error.ts) and validators embed it as the Zod message, so
+   * both render per locale instead of shipping English prose to Arabic users.
+   * Dynamic entries take the params object the thrower supplied.
+   */
   errors: {
     required: "This field is required",
-    tooShort: (min: number) => `Must be at least ${min} characters`,
+    tooShort: (p: ErrorParams) => `Must be at least ${p.min} characters`,
+    tooLong: (p: ErrorParams) => `Must be at most ${p.max} characters`,
     invalidEmail: "Enter a valid email address",
     shortPassword: "Password must be at least 8 characters",
     invalidPhone: "Enter a valid phone number",
     positiveNumber: "Must be a positive number",
+    pricePositive: "Price must be greater than zero",
+    compareAbovePrice: "Compare-at price must be higher than the price",
+    invalidRange: "The minimum must not exceed the maximum",
+    invalidUrl: "Enter a valid link",
     invalidCredentials: "Incorrect email or password",
     emailTaken: "An account with this email already exists — try signing in",
+    unauthorized: "You do not have access to this action",
+
+    customerBanned: "This phone number cannot place orders",
+    productMissing: "A product in your cart is no longer available",
+    productUnavailable: (p: ErrorParams) => `"${p.name}" is not available right now`,
+    stockOnly: (p: ErrorParams) => `Only ${p.count} left of "${p.name}"`,
+    orderNotFound: "Order not found",
+    orderNumberFailed: "Could not allocate an order number — please try again",
+    orderCollectedCannotCancel: "Collected orders must be refunded before cancellation",
+    invalidStatusTransition: (p: ErrorParams) =>
+      `An order cannot move from ${p.from} to ${p.to}`,
+    reviewRateLimited: "Too many reviews submitted — please try again later",
+    stockBelowZero: "Stock adjustment rejected — the result would go below zero",
+    productNotFound: "Product not found",
+    categoryNotFound: "Category not found",
+    categoryMaxDepth: (p: ErrorParams) => `Categories support a maximum depth of ${p.max}`,
+    categoryOwnParent: "A category cannot be its own parent",
+    categoryHasChildren: "Move this category's sub-categories before nesting it",
+    categoryHasProducts: (p: ErrorParams) =>
+      `Reassign ${p.count} product(s) before deleting this category`,
+    bannerNotFound: "Banner not found",
+    bannerSchedule: "The end date must be after the start date",
+    locationNotFound: "Storage location not found",
+    capacityExceeded: (p: ErrorParams) =>
+      `Capacity exceeded — ${p.free} unit(s) free at ${p.location}`,
+    lastSuperAdmin: "The last super admin cannot be demoted",
+    cannotDemoteSelf: "You cannot change your own role",
     generic: "Something went wrong",
   },
 };
@@ -506,6 +553,8 @@ const ar: DeepDictionary = {
     empty: "قائمة المفضلة فارغة",
     emptyCta: "تصفّح المتجر",
     moveToCart: "نقل إلى السلة",
+    add: "أضف إلى المفضلة",
+    remove: "أزل من المفضلة",
   },
   cart: {
     title: "سلتك",
@@ -524,7 +573,8 @@ const ar: DeepDictionary = {
     title: "إتمام الطلب",
     contactInfo: "بيانات التوصيل",
     fullName: "الاسم الكامل",
-    phoneNumber: "رقم الجوال",
+    phoneNumber: "رقم الهاتف",
+    email: "البريد الإلكتروني",
     addressLine1: "العنوان",
     city: "المدينة",
     notes: "ملاحظات الطلب",
@@ -630,6 +680,8 @@ const ar: DeepDictionary = {
     addNew: "إضافة جديد",
     searchPlaceholder: "ابحث…",
     confirmDelete: "هل تريد الحذف نهائيًا؟",
+    archive: "أرشفة",
+    confirmArchive: "أرشفة هذا المنتج؟ سيبقى في التقارير وسجل الطلبات.",
     login: {
       title: "سجّل الدخول إلى لوحة الإدارة",
       subtitle: "صلاحية الإدارة لفريق دنيز فقط",
@@ -767,6 +819,7 @@ const ar: DeepDictionary = {
       topProducts: "المنتجات الأكثر بيعًا",
       revenueByCategory: "الإيرادات حسب الفئة",
       trafficSources: "مصادر الزيارات",
+      trafficPending: "لم يتم ربط تحليلات الزيارات بعد.",
       unitsSold: "الوحدات المبيعة",
       revenue: "الإيرادات",
       daily: "يومي",
@@ -798,13 +851,45 @@ const ar: DeepDictionary = {
   },
   errors: {
     required: "هذا الحقل مطلوب",
-    tooShort: (min: number) => `يجب ألا يقل عن ${min} أحرف`,
+    tooShort: (p: ErrorParams) => `يجب ألا يقل عن ${p.min} أحرف`,
+    tooLong: (p: ErrorParams) => `يجب ألا يزيد عن ${p.max} حرفًا`,
     invalidEmail: "أدخل بريدًا إلكترونيًا صحيحًا",
-    shortPassword: "كلمة المرور يجب ألا تقل عن ٨ أحرف",
-    invalidPhone: "أدخل رقم جوال صحيحًا",
+    shortPassword: "كلمة المرور يجب ألا تقل عن 8 أحرف",
+    invalidPhone: "أدخل رقم هاتف صحيحًا",
     positiveNumber: "يجب أن يكون رقمًا موجبًا",
+    pricePositive: "يجب أن يكون السعر أكبر من صفر",
+    compareAbovePrice: "السعر قبل الخصم يجب أن يكون أعلى من السعر الحالي",
+    invalidRange: "الحد الأدنى يجب ألا يتجاوز الحد الأقصى",
+    invalidUrl: "أدخل رابطًا صحيحًا",
     invalidCredentials: "البريد الإلكتروني أو كلمة المرور غير صحيحة",
     emailTaken: "يوجد حساب بهذا البريد بالفعل — جرّب تسجيل الدخول",
+    unauthorized: "ليس لديك صلاحية لهذا الإجراء",
+
+    customerBanned: "لا يمكن لهذا الرقم إتمام الطلبات",
+    productMissing: "أحد المنتجات في سلتك لم يعد متاحًا",
+    productUnavailable: (p: ErrorParams) => `"${p.name}" غير متاح حاليًا`,
+    stockOnly: (p: ErrorParams) => `تبقى ${p.count} فقط من "${p.name}"`,
+    orderNotFound: "الطلب غير موجود",
+    orderNumberFailed: "تعذّر إنشاء رقم الطلب — حاول مرة أخرى",
+    orderCollectedCannotCancel: "الطلبات المحصّلة تحتاج استرجاعًا قبل الإلغاء",
+    invalidStatusTransition: (p: ErrorParams) =>
+      `لا يمكن نقل الطلب من ${p.from} إلى ${p.to}`,
+    reviewRateLimited: "تم إرسال مراجعات كثيرة — حاول لاحقًا",
+    stockBelowZero: "تم رفض التعديل — الرصيد سيصبح أقل من صفر",
+    productNotFound: "المنتج غير موجود",
+    categoryNotFound: "التصنيف غير موجود",
+    categoryMaxDepth: (p: ErrorParams) => `التصنيفات تدعم ${p.max} مستويات كحد أقصى`,
+    categoryOwnParent: "لا يمكن أن يكون التصنيف تابعًا لنفسه",
+    categoryHasChildren: "انقل التصنيفات الفرعية أولًا قبل تغيير التصنيف الأب",
+    categoryHasProducts: (p: ErrorParams) =>
+      `أعد تعيين ${p.count} منتج قبل حذف هذا التصنيف`,
+    bannerNotFound: "البانر غير موجود",
+    bannerSchedule: "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء",
+    locationNotFound: "موقع التخزين غير موجود",
+    capacityExceeded: (p: ErrorParams) =>
+      `تجاوزت السعة — يتبقى ${p.free} وحدة في ${p.location}`,
+    lastSuperAdmin: "لا يمكن تخفيض صلاحية آخر مدير عام",
+    cannotDemoteSelf: "لا يمكنك تغيير صلاحيتك بنفسك",
     generic: "حدث خطأ ما",
   },
 };

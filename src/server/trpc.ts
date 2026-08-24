@@ -2,9 +2,12 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { ZodError, flattenError } from "zod";
 import superjson from "superjson";
 import { getAuth } from "@/lib/better-auth";
+import { captureException } from "@/lib/sentry";
+import { appError, AppErrorCause } from "./app-error";
+import { ADMIN_ROLES } from "@/lib/constants";
+import type { UserRole } from "@/types/shared";
 
-/** Role union mirrored from the database enum. */
-export type UserRole = "super_admin" | "manager" | "staff" | "customer";
+export type { UserRole };
 
 export interface SessionUser {
   id: string;
@@ -39,13 +42,17 @@ export async function createTRPCContext(request: Request): Promise<TrpcContext> 
         isBanned: Boolean(result.user.isBanned),
       };
     }
-  } catch {
+  } catch (error) {
+    // Degrading to guest is intentional for public queries, but a transient
+    // database blip silently signing an admin out must not go unreported
+    captureException(error);
     user = null;
   }
 
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  const clientIp =
-    forwardedFor?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip") ?? "unknown";
+  // `||` not `??`: an empty x-forwarded-for yields "" , which is not nullish
+  // and would otherwise shadow x-real-ip
+  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const clientIp = forwardedFor || request.headers.get("x-real-ip") || "unknown";
 
   return { user, clientIp };
 }
@@ -62,6 +69,12 @@ const t = initTRPC.context<TrpcContext>().create({
           error.code === "BAD_REQUEST" && error.cause instanceof ZodError
             ? flattenError(error.cause)
             : null,
+        // Dictionary key + params, so the client renders business failures in
+        // its own locale instead of showing a server-authored English string
+        appError:
+          error.cause instanceof AppErrorCause
+            ? { key: error.cause.key, params: error.cause.params }
+            : null,
       },
     };
   },
@@ -73,19 +86,17 @@ export const publicProcedure = t.procedure;
 
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   if (!ctx.user) {
-    throw new TRPCError({ code: "UNAUTHORIZED", message: "Sign in required" });
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "unauthorized" });
   }
   if (ctx.user.isBanned) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Account suspended" });
+    throw appError("FORBIDDEN", "customerBanned");
   }
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
-const ADMIN_ROLES: readonly UserRole[] = ["super_admin", "manager", "staff"];
-
 export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (!ADMIN_ROLES.includes(ctx.user.role)) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+    throw appError("FORBIDDEN", "unauthorized");
   }
   return next({ ctx });
 });
@@ -94,7 +105,7 @@ export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 export function requireRoles(allowed: readonly UserRole[]) {
   return protectedProcedure.use(({ ctx, next }) => {
     if (!allowed.includes(ctx.user.role)) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient role" });
+      throw appError("FORBIDDEN", "unauthorized");
     }
     return next({ ctx });
   });

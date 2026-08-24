@@ -1,4 +1,5 @@
 import {
+  index,
   integer,
   pgEnum,
   pgTable,
@@ -35,4 +36,4 @@ export const inventoryLogs = pgTable("inventory_logs", {
     onDelete: "set null",
   }),
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [index("inventory_logs_productId_idx").on(table.productId)]);

@@ -17,9 +17,10 @@ import type { ProductStatusValue } from "./products.validators";
 export async function resolveUniqueProductSlug(
   requestedSlug: string | undefined,
   nameEn: string,
+  excludeProductId?: string,
 ): Promise<string> {
   const base = slugify(requestedSlug ?? nameEn) || `product-${Date.now()}`;
-  const taken = new Set(await findSlugsTaken(base));
+  const taken = new Set(await findSlugsTaken(base, excludeProductId));
   if (!taken.has(base)) return base;
 
   let suffix = 2;
@@ -43,6 +44,8 @@ export interface SaveProductCommand {
   stockQuantity: number;
   images: { url: string; altText?: string }[];
   variants: {
+    /** Present when editing an existing variant — enables diffing over replace. */
+    id?: string;
     sku?: string;
     size?: string;
     color?: string;
@@ -76,6 +79,12 @@ export async function updateProduct(
   delete productPatch.images;
   delete productPatch.variants;
 
+  // Create resolves collisions; update passed the caller's slug straight to the
+  // unique index, surfacing a raw database error instead of a suffixed slug
+  if (productPatch.slug !== undefined) {
+    productPatch.slug = await resolveUniqueProductSlug(productPatch.slug, productPatch.nameEn ?? "", id);
+  }
+
   const replaceRelations =
     Array.isArray(command.images) || Array.isArray(command.variants);
 
@@ -100,6 +109,21 @@ export async function listProductsForAdmin(filters: {
   return listAllProductsForAdmin(filters);
 }
 
-export async function removeProduct(id: string): Promise<void> {
+/**
+ * Archive rather than delete: a hard delete cascades away the product's stock
+ * ledger — the table documented as append-only and auditable — along with its
+ * reviews. `archived` is the lifecycle state that exists for exactly this.
+ */
+export async function archiveProduct(id: string): Promise<void> {
+  await updateFullProduct(id, {
+    product: { status: "archived" },
+    images: [],
+    variants: [],
+    replaceRelations: false,
+  });
+}
+
+/** Irreversible, and reserved for super admins at the router. */
+export async function destroyProduct(id: string): Promise<void> {
   await deleteProductById(id);
 }

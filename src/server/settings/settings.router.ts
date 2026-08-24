@@ -14,5 +14,5 @@ export const settingsRouter = router({
 
   updateUserRole: requireRoles(["super_admin"])
     .input(updateUserRoleInputSchema)
-    .mutation(({ input }) => changeUserRole(input.userId, input.role)),
+    .mutation(({ ctx, input }) => changeUserRole(input.userId, input.role, ctx.user.id)),
 });

@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { productLocations, products, storageLocations } from "@/db/schema";
 
@@ -30,6 +30,45 @@ export async function listStorageLocations(): Promise<StorageLocationRow[]> {
     })
     .from(storageLocations)
     .orderBy(asc(storageLocations.zone), asc(storageLocations.shelf), asc(storageLocations.bin));
+}
+
+/** Single-row lookup for the capacity guard — no full table scan needed. */
+export async function getStorageLocation(id: string): Promise<StorageLocationRow | undefined> {
+  const [row] = await getDb()
+    .select({
+      id: storageLocations.id,
+      zone: storageLocations.zone,
+      shelf: storageLocations.shelf,
+      bin: storageLocations.bin,
+      capacity: storageLocations.capacity,
+      note: storageLocations.note,
+      storedUnits: sql<number>`(
+        select coalesce(sum(pl.quantity), 0)::int
+        from product_locations pl
+        where pl."locationId" = ${storageLocations.id}
+      )`,
+    })
+    .from(storageLocations)
+    .where(eq(storageLocations.id, id))
+    .limit(1);
+  return row;
+}
+
+/** Units already stored at a location, excluding the product being re-assigned. */
+export async function sumLocationQuantity(
+  locationId: string,
+  excludeProductId: string,
+): Promise<number> {
+  const [row] = await getDb()
+    .select({ total: sql<number>`coalesce(sum(${productLocations.quantity}), 0)::int` })
+    .from(productLocations)
+    .where(
+      and(
+        eq(productLocations.locationId, locationId),
+        ne(productLocations.productId, excludeProductId),
+      ),
+    );
+  return row?.total ?? 0;
 }
 
 export async function createStorageLocation(values: typeof storageLocations.$inferInsert) {

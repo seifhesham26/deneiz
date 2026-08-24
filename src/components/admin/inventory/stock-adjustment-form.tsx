@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { pushToast } from "@/components/ui/toast";
+import { translateError } from "@/lib/translate-error";
 import { useAdjustStock } from "@/hooks/admin/useAdjustStock";
 
 interface StockAdjustmentFormProps {
@@ -37,7 +38,7 @@ export function StockAdjustmentForm({ productId, onDone }: StockAdjustmentFormPr
           pushToast(t.admin.inventoryView.adjusted, "success");
           onDone();
         },
-        onError: (error) => pushToast(error.message || t.errors.generic, "error"),
+        onError: (error) => pushToast(translateError(error, t), "error"),
       },
     );
   }

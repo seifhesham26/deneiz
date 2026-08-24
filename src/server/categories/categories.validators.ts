@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+/** z.coerce.boolean() is Boolean(value), so the string "false" would be true. */
+const boolish = z.preprocess(
+  (value) => (typeof value === "string" ? value === "true" : value),
+  z.boolean(),
+);
+
 export const CATEGORY_MAX_DEPTH = 2;
 
 const optionalText = (max: number) =>
@@ -17,7 +23,7 @@ export const categoryCreateSchema = z.object({
   descriptionAr: optionalText(2000),
   imageUrl: optionalText(2048),
   displayOrder: z.coerce.number().int().min(0).default(0),
-  isActive: z.coerce.boolean().default(true),
+  isActive: boolish.default(true),
 });
 
 export const categoryUpdateSchema = categoryCreateSchema.partial();

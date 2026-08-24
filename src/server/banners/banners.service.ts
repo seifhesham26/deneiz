@@ -1,5 +1,7 @@
+import { appError } from "../app-error";
 import {
   deleteBanner,
+  getBannerById,
   insertBanner,
   listActiveBanners,
   listAllBanners,
@@ -8,7 +10,7 @@ import {
 
 function assertScheduleWindow(startsAt?: Date | null, endsAt?: Date | null): void {
   if (startsAt && endsAt && endsAt <= startsAt) {
-    throw new Error("Banner end date must be after its start date");
+    throw appError("BAD_REQUEST", "bannerSchedule");
   }
 }
 
@@ -41,7 +43,13 @@ export async function editBanner(
     endsAt?: Date | null;
   }>,
 ) {
-  assertScheduleWindow(command.startsAt, command.endsAt);
+  // Patching one date alone must still be checked against the stored other one
+  const existing = await getBannerById(id);
+  if (!existing) throw appError("NOT_FOUND", "bannerNotFound");
+  assertScheduleWindow(
+    "startsAt" in command ? command.startsAt : existing.startsAt,
+    "endsAt" in command ? command.endsAt : existing.endsAt,
+  );
   await updateBanner(id, command);
 }
 

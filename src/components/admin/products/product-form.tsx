@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import type { z } from "zod";
 import { Plus, Trash2 } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
+import { translateFieldMessage } from "@/lib/translate-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -33,6 +34,11 @@ export interface ProductFormRawValues {
 export type ProductFormOutput = z.output<typeof productCreateSchema>;
 
 export interface VariantFormValue {
+  /** Server id when editing — lets the server diff variants instead of
+   *  deleting and re-inserting them, which would orphan persisted cart lines. */
+  id?: string;
+  /** Client-only React key for rows that do not exist server-side yet. */
+  key?: string;
   sku: string;
   size: string;
   color: string;
@@ -55,12 +61,9 @@ function emptyToUndefined(value: string): string | undefined {
   return trimmed === "" ? undefined : trimmed;
 }
 
-function buildProductPayload(
-  values: ProductFormRawValues,
-  images: UploadedImage[],
-  variants: VariantFormValue[],
-): { ok: true; data: ProductFormOutput } | { ok: false; message: string } {
-  const result = productCreateSchema.safeParse({
+/** Shapes the raw string form values into the schema's input shape. */
+function toSchemaInput(values: ProductFormRawValues, images: UploadedImage[], variants: VariantFormValue[]) {
+  return {
     nameEn: values.nameEn,
     nameAr: values.nameAr,
     slug: emptyToUndefined(values.slug),
@@ -77,14 +80,24 @@ function buildProductPayload(
     stockQuantity: values.stockQuantity === "" ? 0 : Number(values.stockQuantity),
     images,
     variants,
-  });
-
-  if (!result.success) {
-    const firstIssue = result.error.issues[0];
-    return { ok: false, message: `${firstIssue.path.join(".")}: ${firstIssue.message}` };
-  }
-  return { ok: true, data: result.data };
+  };
 }
+
+/** RHF resolver over the same schema the server enforces. */
+const productFormResolver: Resolver<ProductFormRawValues> = async (values, context) => {
+  const { images, variants } = context as { images: UploadedImage[]; variants: VariantFormValue[] };
+  const result = productCreateSchema.safeParse(toSchemaInput(values, images, variants));
+  if (result.success) return { values, errors: {} };
+
+  // Map issues onto their fields so each Input renders its own message rather
+  // than one alert() carrying a raw English Zod string
+  const errors: Record<string, { type: string; message: string }> = {};
+  for (const issue of result.error.issues) {
+    const field = String(issue.path[0] ?? "root");
+    errors[field] ??= { type: issue.code, message: issue.message };
+  }
+  return { values: {}, errors };
+};
 
 function CategoryOptions() {
   const { locale, t } = useLang();
@@ -119,6 +132,8 @@ export function ProductForm({
     handleSubmit,
     formState: { errors },
   } = useForm<ProductFormRawValues>({
+    resolver: productFormResolver,
+    context: { images, variants },
     defaultValues: {
       status: "draft",
       price: "",
@@ -138,21 +153,17 @@ export function ProductForm({
   });
 
   function submitHandler(values: ProductFormRawValues) {
-    const payload = buildProductPayload(values, images, variants);
-    if (!payload.ok) {
-      // Surface the first failing constraint; per-field polish comes later
-      window.alert(payload.message);
-      return;
-    }
-    onSubmit(payload.data);
+    // The resolver already validated against productCreateSchema; parse again
+    // only to get the coerced output shape
+    onSubmit(productCreateSchema.parse(toSchemaInput(values, images, variants)));
   }
 
   return (
     <form onSubmit={handleSubmit(submitHandler)} className="flex max-w-3xl flex-col gap-8">
       <section className="grid gap-4 rounded-2xl border border-border bg-surface-raised p-5">
         <h2 className="font-medium">{t.admin.productsView.name}</h2>
-        <Input label={t.admin.productsView.nameEn} error={errors.nameEn?.message} {...register("nameEn")} />
-        <Input label={t.admin.productsView.nameAr} error={errors.nameAr?.message} {...register("nameAr")} />
+        <Input label={t.admin.productsView.nameEn} error={translateFieldMessage(errors.nameEn?.message, t)} {...register("nameEn")} />
+        <Input label={t.admin.productsView.nameAr} error={translateFieldMessage(errors.nameAr?.message, t)} {...register("nameAr")} />
         <Input
           label={`${t.admin.productsView.slug} (${t.common.optional})`}
           hint={t.admin.productsView.slugHint}
@@ -241,7 +252,15 @@ function VariantFields({
           onClick={() =>
             onVariantsChange([
               ...variants,
-              { sku: "", size: "", color: "", material: "", priceDelta: 0, stockQuantity: 0 },
+              {
+                key: crypto.randomUUID(),
+                sku: "",
+                size: "",
+                color: "",
+                material: "",
+                priceDelta: 0,
+                stockQuantity: 0,
+              },
             ])
           }
         >
@@ -253,7 +272,9 @@ function VariantFields({
 
       {variants.map((variant, index) => (
         <div
-          key={index}
+          // Stable per-row key: with key={index}, removing a middle variant
+          // leaves the surviving inputs holding the previous row's values
+          key={variant.key ?? variant.id ?? index}
           className="grid items-end gap-2 rounded-xl border border-border p-3"
           style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(130px, 100%), 1fr))" }}
         >

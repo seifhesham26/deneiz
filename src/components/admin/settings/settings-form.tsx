@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { pushToast } from "@/components/ui/toast";
+import { translateError } from "@/lib/translate-error";
 import { trpc } from "@/lib/trpc-client";
 import { useGetStoreSettings } from "@/hooks/admin/useGetStoreSettings";
 import { useUpdateStoreSettings } from "@/hooks/admin/useUpdateStoreSettings";
@@ -63,7 +64,7 @@ export function SettingsForm() {
       },
       {
         onSuccess: () => pushToast(t.common.saved, "success"),
-        onError: (error) => pushToast(error.message || t.errors.generic, "error"),
+        onError: (error) => pushToast(translateError(error, t), "error"),
       },
     );
   }

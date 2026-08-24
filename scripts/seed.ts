@@ -5,7 +5,7 @@
  *
  * Run: npm run seed   (requires DATABASE_URL in .env.local)
  */
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { config } from "dotenv";
 import { eq } from "drizzle-orm";
 import { getDb } from "../src/db";
@@ -30,8 +30,19 @@ config({ path: ".env.local" });
 
 const IMAGE = (seed: string) => `https://picsum.photos/seed/${seed}/900/1200`;
 
-const DEMO_ADMIN_EMAIL = "admin@deneiz.com";
-const DEMO_ADMIN_PASSWORD = "deneiz-admin-123";
+// Never hardcode a working credential in a tracked file. Both values come from
+// the environment; an absent password is generated per run and printed once.
+// scripts/ runs outside the app, so direct process.env here is correct.
+if (process.env.NODE_ENV === "production") {
+  throw new Error("Refusing to seed: NODE_ENV=production.");
+}
+
+const DEMO_ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "admin@deneiz.local";
+const DEMO_ADMIN_PASSWORD =
+  process.env.SEED_ADMIN_PASSWORD ?? randomBytes(12).toString("base64url");
+
+/** Deleting a real user row is opt-in — `npm run seed -- --reset`. */
+const ALLOW_DESTRUCTIVE_RESET = process.argv.includes("--reset");
 
 async function main() {
   const db = getDb();
@@ -58,6 +69,12 @@ async function main() {
     hasCredential = credentials.length > 0;
 
     if (!hasCredential) {
+      if (!ALLOW_DESTRUCTIVE_RESET) {
+        throw new Error(
+          `A user row for ${DEMO_ADMIN_EMAIL} exists with no credential. ` +
+            "Re-run with --reset to replace it (this deletes that user).",
+        );
+      }
       // Placeholder row with no sign-in path — references null out or cascade
       await db.delete(users).where(eq(users.id, legacyAdmin.id));
     }

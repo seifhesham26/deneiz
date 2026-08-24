@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLang } from "@/components/providers/lang-provider";
 import { formatCurrency } from "@/utils/format-currency";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,6 +16,7 @@ const MIN_QUERY_LENGTH = 2;
 const RESULT_LIMIT = 6;
 
 export function NavbarSearch() {
+  const reduceMotion = useReducedMotion();
   const { locale, t } = useLang();
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -100,7 +101,7 @@ export function NavbarSearch() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
-            transition={{ duration: 0.16 }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.16 }}
             className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-2xl border border-border bg-surface-raised shadow-xl"
           >
             {isFetching && !hasResults ? (

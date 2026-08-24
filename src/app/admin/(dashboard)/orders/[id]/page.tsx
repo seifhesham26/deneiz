@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { pushToast } from "@/components/ui/toast";
+import { translateError } from "@/lib/translate-error";
 import { OrderStatusBadge } from "@/components/admin/orders/order-status-badge";
 import { useGetOrderById } from "@/hooks/admin/useGetOrderById";
 import { useUpdateOrderStatus } from "@/hooks/admin/useUpdateOrderStatus";
@@ -32,7 +33,7 @@ export default function AdminOrderDetailPage({
       {
         onSuccess: () => pushToast(t.admin.ordersView.orderUpdated, "success"),
         onError: (error) => {
-          pushToast(error.message || t.errors.generic, "error");
+          pushToast(translateError(error, t), "error");
           router.refresh();
         },
       },

@@ -35,7 +35,7 @@ export function CategoriesGrid() {
             : categories?.map((category, index) => (
                 <Reveal key={category.id} delay={index * 0.06}>
                   <Link
-                    href={`/products?category=${category.slug}`}
+                    href={`/products?categorySlug=${category.slug}`}
                     className="group relative block aspect-[4/5] overflow-hidden rounded-2xl bg-surface-raised"
                   >
                     {category.imageUrl ? (
@@ -47,11 +47,11 @@ export function CategoriesGrid() {
                         className="object-cover transition-transform duration-500 group-hover:scale-105"
                       />
                     ) : null}
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent p-5 pt-14">
-                      <span className="block font-medium text-white">
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-scrim/75 via-scrim/25 to-transparent p-5 pt-14">
+                      <span className="block font-medium text-on-media">
                         {locale === "ar" ? category.nameAr : category.nameEn}
                       </span>
-                      <span className="mt-0.5 block text-xs text-white/70">
+                      <span className="mt-0.5 block text-xs text-on-media/70">
                         {t.home.shopNow} →
                       </span>
                     </div>

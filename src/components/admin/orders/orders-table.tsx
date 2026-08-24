@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { useLang } from "@/components/providers/lang-provider";
 import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/ui/pagination";
+import { ADMIN_PAGE_SIZE } from "@/lib/constants";
 import { Select } from "@/components/ui/select";
 import { useDebounce } from "@/hooks/shared/useDebounce";
 import { useGetOrders } from "@/hooks/admin/useGetOrders";
@@ -15,13 +17,13 @@ export function OrdersTable() {
   const { locale, t } = useLang();
   const [searchDraft, setSearchDraft] = useState("");
   const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
   const search = useDebounce(searchDraft, 300);
 
   const { data, isLoading } = useGetOrders({
+    page,
     search,
     status: status === "" ? undefined : (status as "pending" | "processing" | "shipped" | "delivered" | "cancelled"),
-    page: 1,
-    pageSize: 50,
   });
 
   return (
@@ -100,6 +102,13 @@ export function OrdersTable() {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        page={page}
+        pageCount={Math.max(1, Math.ceil((data?.total ?? 0) / ADMIN_PAGE_SIZE))}
+        onPageChange={setPage}
+        className="mt-6"
+      />
     </div>
   );
 }

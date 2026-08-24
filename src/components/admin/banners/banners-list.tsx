@@ -7,6 +7,7 @@ import { useLang } from "@/components/providers/lang-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   BannerForm,
   EMPTY_BANNER_FORM,
@@ -16,6 +17,7 @@ import { useGetAllBanners } from "@/hooks/admin/useGetAllBanners";
 import { useDeleteBanner } from "@/hooks/admin/useDeleteBanner";
 
 export function BannersList() {
+  const { confirm, dialog } = useConfirm();
   const { t } = useLang();
   const { data: banners, isLoading } = useGetAllBanners();
   const deleteBanner = useDeleteBanner();
@@ -78,8 +80,9 @@ export function BannersList() {
                     type="button"
                     aria-label={t.common.delete}
                     onClick={() => {
-                      if (!window.confirm(t.admin.confirmDelete)) return;
-                      deleteBanner.mutate({ id: banner.id });
+                      confirm(t.admin.confirmDelete, () =>
+                        deleteBanner.mutate({ id: banner.id }),
+                      );
                     }}
                     className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-text-muted hover:text-danger"
                   >
@@ -97,6 +100,7 @@ export function BannersList() {
       <Modal open={editing !== null} onClose={() => setEditing(null)} title={t.admin.banners}>
         {editing ? <BannerForm initialValues={editing} onDone={() => setEditing(null)} /> : null}
       </Modal>
+      {dialog}
     </div>
   );
 }

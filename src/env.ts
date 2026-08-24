@@ -34,6 +34,11 @@ export const env = {
     return optional("BETTER_AUTH_URL") ?? "http://localhost:3000";
   },
 
+  /** Canonical public origin, used for sitemap/robots absolute URLs. */
+  get siteUrl(): string {
+    return (optional("NEXT_PUBLIC_SITE_URL") ?? this.betterAuthUrl).replace(/\/+$/, "");
+  },
+
   /** Better Auth dashboard (dash plugin) key — absent means the dashboard integration is off. */
   get betterAuthApiKey(): string | undefined {
     return optional("BETTER_AUTH_API_KEY");

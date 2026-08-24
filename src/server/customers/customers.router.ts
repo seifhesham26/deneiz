@@ -1,4 +1,5 @@
-import { adminProcedure, router } from "../trpc";
+import { adminProcedure, requireRoles, router } from "../trpc";
+import { DESTRUCTIVE_ROLES } from "@/lib/constants";
 import { TRPCError } from "@trpc/server";
 import { customerIdInputSchema, customerListQuerySchema, setCustomerBanInputSchema } from "./customers.validators";
 import { getCustomerOverview, getCustomerProfile, toggleCustomerBan } from "./customers.service";
@@ -16,7 +17,7 @@ export const customersRouter = router({
     return profile;
   }),
 
-  setBan: adminProcedure.input(setCustomerBanInputSchema).mutation(({ input }) => {
+  setBan: requireRoles(DESTRUCTIVE_ROLES).input(setCustomerBanInputSchema).mutation(({ input }) => {
     return toggleCustomerBan(input.id, input.isBanned);
   }),
 });

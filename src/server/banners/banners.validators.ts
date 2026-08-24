@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+/** z.coerce.boolean() is Boolean(value), so the string "false" would be true. */
+const boolish = z.preprocess(
+  (value) => (typeof value === "string" ? value === "true" : value),
+  z.boolean(),
+);
+
 export const BANNER_PLACEMENTS = ["hero", "promo"] as const;
 
 const optionalText = (max: number) =>
@@ -14,7 +20,7 @@ export const bannerCreateSchema = z.object({
   imageUrlDesktop: z.string().trim().min(1).max(2048),
   imageUrlMobile: optionalText(2048),
   linkUrl: optionalText(2048),
-  isActive: z.coerce.boolean().default(true),
+  isActive: boolish.default(true),
   displayOrder: z.coerce.number().int().min(0).default(0),
   startsAt: z.coerce.date().nullish(),
   endsAt: z.coerce.date().nullish(),

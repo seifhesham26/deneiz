@@ -22,6 +22,9 @@ interface ImageUploaderProps {
  * PROTOTYPE: uploads POST multipart to /api/uploads which stores files on
  * local disk. Swap for object storage (S3/R2) before production.
  */
+/** Matches productCreateSchema.images.max(10). */
+const MAX_IMAGES = 10;
+
 export function ImageUploader({ images, onChange }: ImageUploaderProps) {
   const { t } = useLang();
   const [urlDraft, setUrlDraft] = useState("");
@@ -31,7 +34,10 @@ export function ImageUploader({ images, onChange }: ImageUploaderProps) {
   async function handleFileUpload(files: FileList | null) {
     if (!files?.length) return;
 
-    for (const file of Array.from(files).slice(0, 10 - images.length)) {
+    // Accumulate locally: `images` is the render-time prop, so calling
+    // onChange([...images, one]) per iteration kept only the last upload
+    const uploaded: UploadedImage[] = [];
+    for (const file of Array.from(files).slice(0, MAX_IMAGES - images.length)) {
       const body = new FormData();
       body.append("file", file);
       const response = await fetch("/api/uploads", { method: "POST", body });
@@ -40,8 +46,9 @@ export function ImageUploader({ images, onChange }: ImageUploaderProps) {
         continue;
       }
       const { url } = (await response.json()) as { url: string };
-      onChange([...images, { url }]);
+      uploaded.push({ url });
     }
+    if (uploaded.length) onChange([...images, ...uploaded]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -75,11 +82,11 @@ export function ImageUploader({ images, onChange }: ImageUploaderProps) {
             className="group relative size-20 overflow-hidden rounded-lg border border-border bg-surface"
           >
             <Image src={image.url} alt={image.altText ?? ""} fill sizes="80px" className="object-cover" />
-            <span className="absolute start-1 top-1 cursor-grab rounded bg-black/50 p-0.5 text-white">
+            <span className="absolute start-1 top-1 cursor-grab rounded bg-scrim/50 p-0.5 text-on-media">
               <GripVertical aria-hidden className="size-3" />
             </span>
             {index === 0 ? (
-              <span className="absolute bottom-1 start-1 rounded bg-accent px-1 text-[0.6rem] font-semibold text-white">
+              <span className="absolute bottom-1 start-1 rounded bg-accent px-1 text-[0.6rem] font-semibold text-on-media">
                 1
               </span>
             ) : null}
@@ -87,7 +94,7 @@ export function ImageUploader({ images, onChange }: ImageUploaderProps) {
               type="button"
               aria-label={t.common.remove}
               onClick={() => onChange(images.filter((_, position) => position !== index))}
-              className="absolute end-1 top-1 flex min-h-6 min-w-6 items-center justify-center rounded-full bg-black/50 text-white"
+              className="absolute end-1 top-1 flex min-h-6 min-w-6 items-center justify-center rounded-full bg-scrim/50 text-on-media"
             >
               <X aria-hidden className="size-3" />
             </button>

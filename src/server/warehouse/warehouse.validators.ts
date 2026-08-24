@@ -20,4 +20,3 @@ export const productAssignmentCreateSchema = z.object({
   quantity: z.coerce.number().int().min(0),
 });
 
-export const assignmentIdInputSchema = z.object({ id: z.uuid() });

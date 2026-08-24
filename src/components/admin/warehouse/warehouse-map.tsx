@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { pushToast } from "@/components/ui/toast";
+import { translateError } from "@/lib/translate-error";
 import { StorageLocationForm } from "./storage-location-form";
 import { useGetWarehouseLocations, useGetWarehouseAssignments } from "@/hooks/admin/useGetWarehouseLocations";
 import { useAssignProductToLocation } from "@/hooks/admin/useAssignProductToLocation";
@@ -32,7 +33,7 @@ function AssignProductForm() {
       { productId, locationId, quantity: Number(quantity) },
       {
         onSuccess: () => pushToast(t.admin.warehouseView.assignmentSaved, "success"),
-        onError: (error) => pushToast(error.message || t.errors.generic, "error"),
+        onError: (error) => pushToast(translateError(error, t), "error"),
       },
     );
   }

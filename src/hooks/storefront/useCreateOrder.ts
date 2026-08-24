@@ -1,14 +1,15 @@
 "use client";
 
 import { trpc } from "@/lib/trpc-client";
-import { useQueryClient } from "@tanstack/react-query";
 
 export function useCreateOrder() {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
   return trpc.orders.create.useMutation({
     // Orders appear in "my orders" immediately after checkout
     onSuccess: () => {
-      void queryClient.invalidateQueries();
+      void utils.orders.invalidate();
+      void utils.products.invalidate();
+      void utils.analytics.invalidate();
     },
   });
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_PAGE_SIZE } from "@/lib/constants";
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@/lib/constants";
 
 /** Canonical literals — kept here (not in the schema) so this module stays
  *  dependency-free and importable from client code. */
@@ -21,28 +21,57 @@ const optionalText = (max: number) =>
   );
 
 const money = z.coerce.number().nonnegative().max(999_999);
+/** Sale price: an empty form field coerces to 0, which would publish a free product. */
+const positiveMoney = money.refine((value) => value > 0, { message: "pricePositive" });
 const boolish = z.preprocess(
   (value) => (typeof value === "string" ? value === "true" : value),
   z.boolean(),
 );
 
-export const productFiltersSchema = z.object({
+export const productFiltersSchema = z
+  .object({
+    search: optionalText(120),
+    categorySlug: optionalText(160),
+    minPrice: money.optional(),
+    maxPrice: money.optional(),
+    sort: z.enum(PRODUCT_SORTS).default("newest"),
+    page: z.coerce.number().int().positive().default(1),
+    pageSize: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+    featuredOnly: boolish.optional(),
+  })
+  .refine(
+    (filters) =>
+      filters.minPrice === undefined ||
+      filters.maxPrice === undefined ||
+      filters.minPrice <= filters.maxPrice,
+    { message: "invalidRange" },
+  );
+
+/** Admin listing filters — previously declared inline in the router. */
+export const adminProductFiltersSchema = z.object({
   search: optionalText(120),
-  categorySlug: optionalText(160),
-  minPrice: money.optional(),
-  maxPrice: money.optional(),
-  sort: z.enum(PRODUCT_SORTS).default("newest"),
+  status: z.enum(PRODUCT_STATUSES).optional(),
   page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(12),
-  featuredOnly: boolish.optional(),
+  pageSize: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(20),
 });
 
 export const productImageInputSchema = z.object({
-  url: z.string().trim().min(1).max(2048),
+  // Relative upload path or absolute http(s) URL — never javascript:
+  url: z
+    .string()
+    .trim()
+    .min(1)
+    .max(2048)
+    .refine((value) => value.startsWith("/") || /^https?:\/\//i.test(value), {
+      message: "invalidUrl",
+    }),
   altText: optionalText(200),
 });
 
 export const productVariantInputSchema = z.object({
+  // Present on edit so variants can be diffed instead of replaced wholesale,
+  // which would reissue every id and orphan the variantId carts persist
+  id: z.uuid().optional(),
   sku: optionalText(64),
   size: optionalText(40),
   color: optionalText(40),
@@ -60,7 +89,7 @@ export const productCreateSchema = z.object({
   metaTitle: optionalText(200),
   metaDescription: optionalText(320),
   categoryId: z.uuid().nullish(),
-  price: money,
+  price: positiveMoney,
   compareAtPrice: money.nullish(),
   status: z.enum(PRODUCT_STATUSES).default("draft"),
   isFeatured: boolish.default(false),
@@ -69,7 +98,18 @@ export const productCreateSchema = z.object({
   variants: z.array(productVariantInputSchema).max(30).default([]),
 });
 
-export const productUpdateSchema = productCreateSchema.partial();
+/** A strike-through price below the sale price renders no badge at all. */
+const compareAbovePrice = (values: { price?: number; compareAtPrice?: number | null }) =>
+  values.compareAtPrice == null || values.price === undefined || values.compareAtPrice > values.price;
+
+export const productCreateInputSchema = productCreateSchema.refine(compareAbovePrice, {
+  message: "compareAbovePrice",
+  path: ["compareAtPrice"],
+});
+
+export const productUpdateSchema = productCreateSchema
+  .partial()
+  .refine(compareAbovePrice, { message: "compareAbovePrice", path: ["compareAtPrice"] });
 
 export const productIdInputSchema = z.object({ id: z.uuid() });
 

@@ -1,31 +1,36 @@
 "use client";
 
 import { trpc } from "@/lib/trpc-client";
-import { useQueryClient } from "@tanstack/react-query";
 
 export function useModerateReview() {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
   return trpc.reviews.moderate.useMutation({
     onSuccess: () => {
-      void queryClient.invalidateQueries();
+      void utils.reviews.invalidate();
+      void utils.products.invalidate();
+      void utils.analytics.invalidate();
     },
   });
 }
 
 export function useSetReviewFlagged() {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
   return trpc.reviews.setFlagged.useMutation({
     onSuccess: () => {
-      void queryClient.invalidateQueries();
+      void utils.reviews.invalidate();
+      void utils.products.invalidate();
+      void utils.analytics.invalidate();
     },
   });
 }
 
 export function useDeleteReview() {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
   return trpc.reviews.delete.useMutation({
     onSuccess: () => {
-      void queryClient.invalidateQueries();
+      void utils.reviews.invalidate();
+      void utils.products.invalidate();
+      void utils.analytics.invalidate();
     },
   });
 }
