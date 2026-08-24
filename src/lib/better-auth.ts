@@ -37,6 +37,21 @@ function createAuth() {
         isBanned: { type: "boolean", defaultValue: false, input: false },
       },
     },
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user) => {
+            // First-admin bootstrap: the configured email registers as
+            // super_admin with its own chosen password — no SQL handouts
+            const bootstrapEmail = env.adminBootstrapEmail?.toLowerCase();
+            if (bootstrapEmail && user.email.toLowerCase() === bootstrapEmail) {
+              return { data: { ...user, role: "super_admin" } };
+            }
+            return { data: user };
+          },
+        },
+      },
+    },
   });
 }
 

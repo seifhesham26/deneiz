@@ -38,6 +38,9 @@ const en = {
     showPassword: "Show password",
     hidePassword: "Hide password",
     orContinueWith: "or",
+    previous: "Previous",
+    next: "Next",
+    pageLabel: (page: number) => `Page ${page}`,
   },
   nav: {
     home: "Home",
@@ -47,6 +50,10 @@ const en = {
     wishlist: "Wishlist",
     account: "Account",
     adminPanel: "Admin panel",
+    viewStore: "View store",
+  },
+  shop: {
+    eyebrow: "The collection",
   },
   home: {
     heroTitle: "Details make the difference",
@@ -434,6 +441,9 @@ const ar: DeepDictionary = {
     showPassword: "إظهار كلمة المرور",
     hidePassword: "إخفاء كلمة المرور",
     orContinueWith: "أو",
+    previous: "السابق",
+    next: "التالي",
+    pageLabel: (page: number) => `صفحة ${page}`,
   },
   nav: {
     home: "الرئيسية",
@@ -443,6 +453,10 @@ const ar: DeepDictionary = {
     wishlist: "المفضلة",
     account: "حسابي",
     adminPanel: "لوحة الإدارة",
+    viewStore: "عرض المتجر",
+  },
+  shop: {
+    eyebrow: "التشكيلة",
   },
   home: {
     heroTitle: "التفاصيل تصنع الفرق",

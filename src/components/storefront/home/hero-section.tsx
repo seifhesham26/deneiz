@@ -5,12 +5,11 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useLang } from "@/components/providers/lang-provider";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useGetBanners } from "@/hooks/storefront/useGetBanners";
 
 export function HeroSection() {
   const { locale, t } = useLang();
-  const { data: banners, isLoading } = useGetBanners("hero");
+  const { data: banners } = useGetBanners("hero");
   const banner = banners?.[0];
 
   return (
@@ -47,8 +46,6 @@ export function HeroSection() {
             </Link>
           </div>
         </motion.div>
-
-        {isLoading ? <Skeleton className="mt-8 h-4 w-40" /> : null}
       </div>
     </section>
   );

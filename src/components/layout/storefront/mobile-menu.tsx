@@ -2,21 +2,42 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
 import { useUiStore } from "@/store/ui.store";
 import { useGetSessionUser } from "@/hooks/storefront/useGetSessionUser";
+import { useBodyScrollLock } from "@/hooks/shared/useBodyScrollLock";
 
 const ADMIN_ROLES = ["super_admin", "manager", "staff"];
 
 export function MobileMenu() {
-  const { t } = useLang();
+  const { locale, t } = useLang();
   const pathname = usePathname();
   const isOpen = useUiStore((state) => state.isMobileMenuOpen);
   const setOpen = useUiStore((state) => state.setMobileMenuOpen);
   const { user } = useGetSessionUser();
   const isAdmin = Boolean(user && ADMIN_ROLES.includes(user.role));
+
+  // The hamburger is visible below lg, so the drawer must be too
+  useBodyScrollLock(isOpen);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, setOpen]);
+
+  // Slide direction follows the drawer's logical start edge (left in LTR,
+  // right in RTL) so it always enters from the side it is anchored to
+  const isRtl = locale === "ar";
+  const offscreenX = isRtl ? "100%" : "-100%";
 
   const links = [
     { href: "/", label: t.nav.home },
@@ -35,17 +56,20 @@ export function MobileMenu() {
       {isOpen ? (
         <>
           <motion.div
-            className="fixed inset-0 z-50 bg-black/50 md:hidden"
+            className="fixed inset-0 z-50 bg-black/50 lg:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={close}
           />
           <motion.aside
-            className="fixed inset-y-0 start-0 z-50 flex w-72 max-w-[85vw] flex-col gap-2 bg-background p-5 pt-6 md:hidden"
-            initial={{ x: "-100%" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.common.menu}
+            className="fixed inset-y-0 start-0 z-50 flex w-72 max-w-[85vw] flex-col gap-2 overflow-y-auto bg-background p-5 pt-6 lg:hidden"
+            initial={{ x: offscreenX }}
             animate={{ x: 0 }}
-            exit={{ x: "-100%" }}
+            exit={{ x: offscreenX }}
             transition={{ type: "spring", stiffness: 320, damping: 32 }}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -60,17 +84,27 @@ export function MobileMenu() {
               </button>
             </div>
 
-            {links.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={close}
-                aria-current={pathname === link.href ? "page" : undefined}
-                className="min-h-11 rounded-lg px-3 text-base leading-[2.75rem] hover:bg-surface"
-              >
-                {link.label}
-              </Link>
-            ))}
+            <nav aria-label="mobile" className="flex flex-col">
+              {links.map((link) => {
+                const isActive =
+                  link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={close}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`min-h-11 rounded-lg px-3 text-base leading-[2.75rem] transition-colors ${
+                      isActive
+                        ? "bg-surface font-medium text-text-primary"
+                        : "hover:bg-surface"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </nav>
           </motion.aside>
         </>
       ) : null}

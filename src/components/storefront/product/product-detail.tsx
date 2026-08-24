@@ -75,34 +75,34 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   }
 
   return (
-    <div className="content-shell section-y flex flex-col gap-16">
+    <div className="content-shell section-y flex flex-col gap-12">
+      {/* Breadcrumb spans the page above the fold so context is visible before scrolling */}
+      <nav aria-label="breadcrumb" className="text-xs text-text-muted">
+        <Link href="/" className="hover:text-text-secondary">
+          {t.nav.home}
+        </Link>
+        <span aria-hidden> / </span>
+        <Link href="/products" className="hover:text-text-secondary">
+          {t.nav.products}
+        </Link>
+        {categoryName ? (
+          <>
+            <span aria-hidden> / </span>
+            <Link
+              href={`/products?category=${product.categorySlug}`}
+              className="hover:text-text-secondary"
+            >
+              {categoryName}
+            </Link>
+          </>
+        ) : null}
+      </nav>
+
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-14 xl:gap-20">
         <ProductImages images={product.images} productName={name} />
 
         <div className="lg:sticky lg:top-28 lg:self-start">
           <div className="flex flex-col gap-5">
-            {/* Breadcrumb keeps context without taking the user off-page */}
-            <nav aria-label="breadcrumb" className="text-xs text-text-muted">
-              <Link href="/" className="hover:text-text-secondary">
-                {t.nav.home}
-              </Link>
-              <span aria-hidden> / </span>
-              <Link href="/products" className="hover:text-text-secondary">
-                {t.nav.products}
-              </Link>
-              {categoryName ? (
-                <>
-                  <span aria-hidden> / </span>
-                  <Link
-                    href={`/products?category=${product.categorySlug}`}
-                    className="hover:text-text-secondary"
-                  >
-                    {categoryName}
-                  </Link>
-                </>
-              ) : null}
-            </nav>
-
             <h1 className="text-3xl font-semibold sm:text-4xl">{name}</h1>
 
             <div className="flex flex-wrap items-center gap-3">

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { Banknote } from "lucide-react";
+import { Banknote, Check } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,12 +71,17 @@ export function CheckoutForm() {
 
   if (placedOrderNumber) {
     return (
-      <div className="flex flex-col items-center gap-4 py-20 text-center">
-        <span className="text-5xl">✓</span>
+      <div className="flex flex-col items-center gap-5 py-20 text-center">
+        <span className="flex size-16 items-center justify-center rounded-full bg-success/15">
+          <Check aria-hidden className="size-8 text-success" />
+        </span>
         <h1 className="text-3xl font-semibold">{t.confirmation.title}</h1>
         <p className="max-w-md text-text-secondary">{t.confirmation.subtitle}</p>
         <p className="rounded-xl bg-surface px-6 py-3 text-sm">
-          {t.confirmation.orderNumber}: <strong>{placedOrderNumber}</strong>
+          {t.confirmation.orderNumber}:{" "}
+          <strong className="font-mono" dir="ltr">
+            {placedOrderNumber}
+          </strong>
         </p>
         <Button onClick={() => router.push("/products")}>{t.confirmation.continueShopping}</Button>
       </div>

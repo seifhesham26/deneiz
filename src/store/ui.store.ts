@@ -10,15 +10,19 @@ import { create } from "zustand";
 interface UiState {
   isCartDrawerOpen: boolean;
   isMobileMenuOpen: boolean;
+  isAdminSidebarOpen: boolean;
   openCartDrawer: () => void;
   closeCartDrawer: () => void;
   setMobileMenuOpen: (open: boolean) => void;
+  setAdminSidebarOpen: (open: boolean) => void;
 }
 
 export const useUiStore = create<UiState>()((set) => ({
   isCartDrawerOpen: false,
   isMobileMenuOpen: false,
+  isAdminSidebarOpen: false,
   openCartDrawer: () => set({ isCartDrawerOpen: true }),
   closeCartDrawer: () => set({ isCartDrawerOpen: false }),
   setMobileMenuOpen: (open) => set({ isMobileMenuOpen: open }),
+  setAdminSidebarOpen: (open) => set({ isAdminSidebarOpen: open }),
 }));

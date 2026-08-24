@@ -2,9 +2,10 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useIsHydrated } from "@/hooks/shared/useIsHydrated";
+import { useBodyScrollLock } from "@/hooks/shared/useBodyScrollLock";
 
 interface ModalProps {
   open: boolean;
@@ -13,16 +14,50 @@ interface ModalProps {
   children: React.ReactNode;
 }
 
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function Modal({ open, onClose, title, children }: ModalProps) {
   const isHydrated = useIsHydrated();
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useBodyScrollLock(isHydrated && open);
 
   useEffect(() => {
     if (!open) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+
+      // Keep Tab cycling inside the dialog while it is open
+      if (event.key !== "Tab" || !panelRef.current) return;
+      const focusables = panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+      if (focusables.length === 0) return;
+
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && (active === first || active === panelRef.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus();
+    };
   }, [open, onClose]);
 
   if (!isHydrated) return null;
@@ -38,10 +73,12 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
           onClick={onClose}
         >
           <motion.div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-surface-raised p-5 sm:rounded-2xl"
+            tabIndex={-1}
+            className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-surface-raised p-5 outline-none sm:rounded-2xl"
             initial={{ y: 40, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}

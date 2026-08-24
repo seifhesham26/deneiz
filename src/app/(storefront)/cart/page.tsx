@@ -1,9 +1,11 @@
 "use client";
 
 import { ShoppingBag } from "lucide-react";
+import Link from "next/link";
 import { useLang } from "@/components/providers/lang-provider";
 import { CartItemRow } from "@/components/storefront/cart/cart-item";
 import { CartSummary } from "@/components/storefront/cart/cart-summary";
+import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/cart.store";
 import { useIsHydrated } from "@/hooks/shared/useIsHydrated";
 import { DEFAULT_SHIPPING_FEE, FREE_SHIPPING_THRESHOLD } from "@/lib/constants";
@@ -30,6 +32,9 @@ export default function CartPage() {
         <div className="flex flex-col items-center gap-4 py-20 text-center">
           <ShoppingBag aria-hidden className="size-14 text-text-muted" />
           <p className="text-text-secondary">{t.cart.empty}</p>
+          <Link href="/products">
+            <Button>{t.cart.emptyCta}</Button>
+          </Link>
         </div>
       ) : (
         <div className="flex flex-col gap-10 lg:flex-row-reverse lg:gap-12">

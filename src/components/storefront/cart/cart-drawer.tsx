@@ -4,11 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect } from "react";
 import { useLang } from "@/components/providers/lang-provider";
 import { Button } from "@/components/ui/button";
 import { useCartStore, cartLineKey } from "@/store/cart.store";
 import { useUiStore } from "@/store/ui.store";
 import { useIsHydrated } from "@/hooks/shared/useIsHydrated";
+import { useBodyScrollLock } from "@/hooks/shared/useBodyScrollLock";
+import { formatCurrency } from "@/utils/format-currency";
 
 export function CartDrawer() {
   const { locale, t } = useLang();
@@ -19,14 +22,29 @@ export function CartDrawer() {
   const removeItem = useCartStore((state) => state.removeItem);
   const isHydrated = useIsHydrated();
 
-  if (!isHydrated) return null;
+  const open = isHydrated && isOpen;
+  useBodyScrollLock(open);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") closeCartDrawer();
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, closeCartDrawer]);
+
+  // Slide follows the logical end edge (right in LTR, left in RTL)
+  const offscreenX = locale === "ar" ? "-100%" : "100%";
 
   const subtotal =
     Math.round(items.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0) * 100) / 100;
 
   return (
     <AnimatePresence>
-      {isOpen ? (
+      {open ? (
         <>
           <motion.div
             className="fixed inset-0 z-50 bg-black/50"
@@ -39,9 +57,9 @@ export function CartDrawer() {
             role="dialog"
             aria-label={t.cart.title}
             className="fixed inset-y-0 end-0 z-50 flex w-[26rem] max-w-[92vw] flex-col bg-background"
-            initial={{ x: "100%" }}
+            initial={{ x: offscreenX }}
             animate={{ x: 0 }}
-            exit={{ x: "100%" }}
+            exit={{ x: offscreenX }}
             transition={{ type: "spring", stiffness: 320, damping: 32 }}
           >
             <div className="flex items-center justify-between border-b border-border p-4">
@@ -89,7 +107,7 @@ export function CartDrawer() {
                         {line.variantLabel ? (
                           <span className="text-xs text-text-muted">{line.variantLabel}</span>
                         ) : null}
-                        <span className="text-sm">{line.unitPrice.toLocaleString(locale)}</span>
+                        <span className="text-sm">{formatCurrency(line.unitPrice, locale)}</span>
 
                         <div className="mt-auto flex items-center justify-between">
                           <div className="flex items-center gap-1">
@@ -130,7 +148,7 @@ export function CartDrawer() {
                 <div className="border-t border-border p-4">
                   <div className="mb-3 flex items-center justify-between text-sm">
                     <span className="text-text-secondary">{t.cart.subtotal}</span>
-                    <span className="font-semibold">{subtotal.toLocaleString(locale)}</span>
+                    <span className="font-semibold">{formatCurrency(subtotal, locale)}</span>
                   </div>
                   <Link href="/checkout" onClick={closeCartDrawer} className="block">
                     <Button className="w-full">{t.cart.checkout}</Button>

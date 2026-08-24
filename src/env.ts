@@ -39,6 +39,14 @@ export const env = {
     return optional("BETTER_AUTH_API_KEY");
   },
 
+  /**
+   * First-admin bootstrap: this email signs up directly as super_admin.
+   * Clear it once the team is provisioned — later sign-ups stay customers.
+   */
+  get adminBootstrapEmail(): string | undefined {
+    return optional("ADMIN_EMAIL");
+  },
+
   /** Absent key means transactional emails are skipped (logged instead). */
   get resendApiKey(): string | undefined {
     return optional("RESEND_API_KEY");

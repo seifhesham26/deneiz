@@ -56,11 +56,11 @@ export default function WishlistPage() {
                 </Link>
 
                 <div className="mt-auto flex gap-2">
-                  {/* Price lives on the product record — route there so the cart gets a real unit price */}
+                  {/* Price/variants live on the product record — route there so the cart gets a real line */}
                   <Link href={`/products/${entry.slug}`} className="flex-1">
                     <Button size="sm" variant="outline" className="w-full">
                       <ShoppingBag aria-hidden className="size-4" />
-                      {t.wishlist.moveToCart}
+                      {t.product.selectVariant}
                     </Button>
                   </Link>
                   <Button size="sm" variant="ghost" onClick={() => removeFromWishlist(entry.productId)}>

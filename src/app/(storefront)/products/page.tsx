@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
 import { ProductFiltersPanel } from "@/components/storefront/product/product-filters-panel";
 import { ProductGrid } from "@/components/storefront/product/product-grid";
@@ -42,7 +42,7 @@ function ProductsPageContent() {
   return (
     <div className="content-shell section-y">
       <header className="mb-10 flex flex-col gap-2">
-        <span className="eyebrow">{t.nav.categories}</span>
+        <span className="eyebrow">{t.shop.eyebrow}</span>
         <h1 className="text-4xl font-semibold sm:text-5xl">{t.nav.products}</h1>
         {data ? (
           <span className="text-sm text-text-secondary">{t.filters.resultsCount(data.total)}</span>
@@ -79,25 +79,41 @@ function ProductsPageContent() {
           ) : null}
 
           {totalPages > 1 ? (
-            <nav className="mt-12 flex items-center justify-center gap-2" aria-label="pagination">
-              {Array.from({ length: totalPages }).map((_, index) => {
-                const pageNumber = index + 1;
-                return (
+            <nav className="mt-12 flex items-center justify-center gap-1.5" aria-label="pagination">
+              <PaginationArrow
+                direction="start"
+                label={t.common.previous}
+                disabled={filters.page <= 1}
+                onClick={() => updateFilters({ page: filters.page - 1 })}
+              />
+              {buildPageWindow(filters.page, totalPages).map((entry, index) =>
+                typeof entry === "number" ? (
                   <button
-                    key={pageNumber}
+                    key={entry}
                     type="button"
-                    onClick={() => updateFilters({ page: pageNumber })}
-                    aria-current={pageNumber === filters.page ? "page" : undefined}
+                    onClick={() => updateFilters({ page: entry })}
+                    aria-current={entry === filters.page ? "page" : undefined}
+                    aria-label={t.common.pageLabel(entry)}
                     className={`flex min-h-11 min-w-11 items-center justify-center rounded-full text-sm transition-colors ${
-                      pageNumber === filters.page
+                      entry === filters.page
                         ? "bg-primary font-semibold text-text-inverse"
                         : "hover:bg-surface"
                     }`}
                   >
-                    {pageNumber}
+                    {entry}
                   </button>
-                );
-              })}
+                ) : (
+                  <span key={`gap-${index}`} className="px-1.5 text-text-muted" aria-hidden>
+                    …
+                  </span>
+                ),
+              )}
+              <PaginationArrow
+                direction="end"
+                label={t.common.next}
+                disabled={filters.page >= totalPages}
+                onClick={() => updateFilters({ page: filters.page + 1 })}
+              />
             </nav>
           ) : null}
 
@@ -123,6 +139,55 @@ function ProductsPageContent() {
         />
       </Modal>
     </div>
+  );
+}
+
+/** Page numbers around the current page, with ellipsis gaps for far ranges. */
+function buildPageWindow(current: number, total: number): (number | "gap")[] {
+  const desired = new Set(
+    [1, 2, current - 1, current, current + 1, total - 1, total].filter(
+      (page) => page >= 1 && page <= total,
+    ),
+  );
+
+  if (desired.size >= total) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+
+  const sorted = [...desired].sort((a, b) => a - b);
+  const pages: (number | "gap")[] = [];
+  let previous = 0;
+  for (const page of sorted) {
+    if (page - previous > 1) pages.push("gap");
+    pages.push(page);
+    previous = page;
+  }
+  return pages;
+}
+
+function PaginationArrow({
+  direction,
+  label,
+  disabled,
+  onClick,
+}: {
+  direction: "start" | "end";
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const Icon = direction === "start" ? ChevronLeft : ChevronRight;
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex min-h-11 min-w-11 items-center justify-center rounded-full transition-colors hover:bg-surface disabled:pointer-events-none disabled:opacity-40"
+    >
+      {/* Chevrons are direction-biased; mirror them under RTL */}
+      <Icon aria-hidden className="size-4.5 rtl:rotate-180" />
+    </button>
   );
 }
 

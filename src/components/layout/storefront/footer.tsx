@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Mail, Phone } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
-import { ThemeToggle } from "./theme-toggle";
 
 export function Footer() {
   const { t } = useLang();
@@ -55,9 +54,8 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-border py-5">
+        <div className="border-t border-border py-5">
           <p className="text-xs text-text-muted">{t.footer.rights(year)}</p>
-          <ThemeToggle />
         </div>
       </div>
     </footer>

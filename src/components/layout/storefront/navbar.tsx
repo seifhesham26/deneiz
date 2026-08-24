@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Heart, Menu, ShoppingBag, User } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
 import { LanguageToggle } from "./language-toggle";
@@ -16,6 +17,7 @@ const ADMIN_ROLES = ["super_admin", "manager", "staff"];
 
 export function Navbar() {
   const { t } = useLang();
+  const pathname = usePathname();
   const openMobileMenu = useUiStore((state) => state.setMobileMenuOpen);
   const openCartDrawer = useUiStore((state) => state.openCartDrawer);
   const itemCount = useCartStore(selectCartItemCount);
@@ -32,32 +34,39 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-md">
-      {/* Three-zone desktop layout: links · search · brand+actions */}
+      {/* Four-zone desktop layout: brand · links · search · actions */}
       <div className="content-shell hidden h-[4.5rem] items-center gap-8 lg:flex">
+        <Link href="/" className="text-xl font-semibold tracking-wide">
+          {t.common.storeName}
+        </Link>
+
         <nav className="flex items-center gap-7" aria-label="primary">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "text-sm font-medium transition-colors",
-                link.href === "/admin"
-                  ? "text-accent hover:opacity-80"
-                  : "text-text-secondary hover:text-text-primary",
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {links.map((link) => {
+            const isActive =
+              link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={isActive && link.href !== "/admin" ? "page" : undefined}
+                className={cn(
+                  "text-sm font-medium transition-colors",
+                  link.href === "/admin"
+                    ? "text-accent hover:opacity-80"
+                    : isActive
+                      ? "text-text-primary"
+                      : "text-text-secondary hover:text-text-primary",
+                )}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="flex flex-1 justify-center">
           <NavbarSearch />
         </div>
-
-        <Link href="/" className="text-xl font-semibold tracking-wide">
-          {t.common.storeName}
-        </Link>
 
         <div className="ms-auto flex items-center gap-0.5">
           <LanguageToggle />
