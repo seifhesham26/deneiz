@@ -107,7 +107,7 @@ const en = {
     total: "Total",
     checkout: "Checkout",
     continueShopping: "Continue shopping",
-    freeShippingHint: (remaining: number) => `Add ${remaining} SAR more for free shipping`,
+    freeShippingHint: (remaining: number) => `Add ${remaining} EGP more for free shipping`,
     itemsCount: (count: number) => `${count} ${count === 1 ? "item" : "items"}`,
   },
   checkout: {
@@ -502,7 +502,7 @@ const ar: DeepDictionary = {
     total: "الإجمالي",
     checkout: "إتمام الطلب",
     continueShopping: "مواصلة التسوق",
-    freeShippingHint: (remaining: number) => `أضف ${remaining} ريال للحصول على شحن مجاني`,
+    freeShippingHint: (remaining: number) => `أضف ${remaining} جنيه للحصول على شحن مجاني`,
     itemsCount: (count: number) => `${count} منتج`,
   },
   checkout: {

@@ -36,7 +36,7 @@ export const settings = pgTable("settings", {
   storeNameAr: text("storeNameAr").notNull().default("دنيز"),
   supportEmail: text("supportEmail"),
   supportPhone: text("supportPhone"),
-  currency: text("currency").notNull().default("SAR"),
+  currency: text("currency").notNull().default("EGP"),
   defaultLocale: text("defaultLocale", { enum: ["ar", "en"] })
     .notNull()
     .default("ar"),

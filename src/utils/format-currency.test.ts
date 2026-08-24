@@ -5,7 +5,7 @@ import { formatDate } from "./format-date";
 describe("formatCurrency", () => {
   it("formats whole amounts without decimals in English", () => {
     // Intl inserts a non-breaking space between code and amount
-    expect(formatCurrency(250, "en").replace(/\u00A0/g, " ")).toBe("SAR 250");
+    expect(formatCurrency(250, "en").replace(/\u00A0/g, " ")).toBe("EGP 250");
   });
 
   it("keeps latin digits for Arabic", () => {

@@ -7,7 +7,7 @@ import type { Locale } from "@/types/shared";
  */
 const LOCALE_TAGS: Record<Locale, string> = {
   en: "en-US",
-  ar: "ar-SA-u-nu-latn",
+  ar: "ar-EG-u-nu-latn",
 };
 
 export function formatCurrency(amount: number, locale: Locale): string {

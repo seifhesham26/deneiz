@@ -1,4 +1,4 @@
-import { boolean, pgEnum, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, pgEnum, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", [
   "super_admin",
@@ -37,23 +37,31 @@ export const sessions = pgTable("session", {
   updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const accounts = pgTable("account", {
-  id: text("id").primaryKey(),
-  userId: text("userId")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  accountId: text("accountId").notNull(),
-  providerId: text("providerId").notNull(),
-  accessToken: text("accessToken"),
-  refreshToken: text("refreshToken"),
-  idToken: text("idToken"),
-  accessTokenExpiresAt: timestamp("accessTokenExpiresAt", { withTimezone: true }),
-  refreshTokenExpiresAt: timestamp("refreshTokenExpiresAt", { withTimezone: true }),
-  scope: text("scope"),
-  password: text("password"),
-  createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
-});
+export const accounts = pgTable(
+  "account",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accountId: text("accountId").notNull(),
+    providerId: text("providerId").notNull(),
+    // Better Auth 1.7 scopes identities by issuer — "local:credential" for email/password
+    issuer: text("issuer").notNull().default("local:credential"),
+    accessToken: text("accessToken"),
+    refreshToken: text("refreshToken"),
+    idToken: text("idToken"),
+    accessTokenExpiresAt: timestamp("accessTokenExpiresAt", { withTimezone: true }),
+    refreshTokenExpiresAt: timestamp("refreshTokenExpiresAt", { withTimezone: true }),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("account_issuer_accountId_uidx").on(table.issuer, table.accountId),
+  ],
+);
 
 export const verifications = pgTable("verification", {
   id: text("id").primaryKey(),

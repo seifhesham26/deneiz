@@ -7,7 +7,7 @@ const DATE_FORMATS: Record<Locale, Intl.DateTimeFormatOptions> = {
 
 const LOCALE_TAGS: Record<Locale, string> = {
   en: "en-US",
-  ar: "ar-SA-u-nu-latn",
+  ar: "ar-EG-u-nu-latn",
 };
 
 export function formatDate(

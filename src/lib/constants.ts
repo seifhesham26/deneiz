@@ -14,7 +14,7 @@ export const FREE_SHIPPING_THRESHOLD = 300;
 
 export const DEFAULT_SHIPPING_FEE = 25;
 
-export const CURRENCY_CODE = "SAR";
+export const CURRENCY_CODE = "EGP";
 
 /** Better Auth session cookie — checked by the proxy before hitting /admin. */
 export const SESSION_COOKIE_NAME = "better-auth.session_token";
