@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
 import { Button } from "@/components/ui/button";
@@ -15,22 +13,14 @@ interface AdminRouteGuardProps {
 }
 
 /**
- * Second layer of admin protection after the proxy cookie gate: blocks
- * signed-in non-admins from rendering dashboards full of FORBIDDEN queries.
+ * Second layer of admin protection after the proxy cookie gate. Signed-in
+ * non-admins get an explicit "no access" card — silently bouncing them home
+ * made failed admin visits look like a broken link.
  */
 export function AdminRouteGuard({ children }: AdminRouteGuardProps) {
   const { t } = useLang();
-  const router = useRouter();
   const { user, isLoading } = useGetSessionUser();
   const isAdmin = Boolean(user && ADMIN_ROLES.includes(user.role));
-
-  // Signed-in non-admins go home; anonymous users should never reach here
-  // (the proxy redirects first), but stay safe if the cookie outlives the session
-  useEffect(() => {
-    if (!isLoading && user && !isAdmin) {
-      router.replace("/");
-    }
-  }, [isLoading, user, isAdmin, router]);
 
   if (isLoading) {
     return (
@@ -46,6 +36,9 @@ export function AdminRouteGuard({ children }: AdminRouteGuardProps) {
         <div className="flex max-w-sm flex-col items-center gap-4 rounded-2xl border border-border bg-surface-raised p-8 text-center">
           <ShieldAlert aria-hidden className="size-10 text-danger" />
           <p className="text-sm font-medium">{t.admin.login.forbidden}</p>
+          {!user ? (
+            <p className="text-xs text-text-secondary">{t.admin.login.required}</p>
+          ) : null}
           <Link href="/">
             <Button variant="outline" size="sm">
               ← {t.nav.home}

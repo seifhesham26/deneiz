@@ -11,10 +11,9 @@ export function Footer() {
   return (
     <footer className="mt-auto border-t border-border bg-surface">
       <div className="content-shell">
-        <div
-          className="grid gap-12 py-16"
-          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))" }}
-        >
+        {/* Two columns on small screens (auto-fit collapses to one long
+            column there); four balanced columns from lg up */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-12 py-12 sm:py-16 lg:grid-cols-4 lg:gap-12 lg:py-16">
           <div className="flex flex-col gap-4">
             <span className="text-2xl font-semibold tracking-wide">{t.common.storeName}</span>
             <p className="max-w-xs text-sm leading-relaxed text-text-secondary">{t.footer.about}</p>

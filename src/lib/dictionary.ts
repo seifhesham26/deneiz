@@ -232,6 +232,7 @@ const en = {
       subtitle: "Management access for the Deneiz team only",
       invalidCredentials: "Invalid email or password",
       forbidden: "This account does not have admin access",
+      sessionExpired: "Your session has ended — sign in again to continue",
     },
     dashboardView: {
       revenue30d: "Revenue (30 days)",
@@ -634,6 +635,7 @@ const ar: DeepDictionary = {
       subtitle: "صلاحية الإدارة لفريق دنيز فقط",
       invalidCredentials: "البريد الإلكتروني أو كلمة المرور غير صحيحة",
       forbidden: "هذا الحساب لا يملك صلاحية إدارية",
+      sessionExpired: "انتهت جلستك — سجّل الدخول مرة أخرى للمتابعة",
     },
     dashboardView: {
       revenue30d: "الإيرادات (٣٠ يومًا)",

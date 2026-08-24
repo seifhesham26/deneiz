@@ -7,8 +7,11 @@
  */
 import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
+import { eq } from "drizzle-orm";
 import { getDb } from "../src/db";
+import { getAuth } from "../src/lib/better-auth";
 import {
+  accounts,
   banners,
   categories,
   customers,
@@ -27,27 +30,57 @@ config({ path: ".env.local" });
 
 const IMAGE = (seed: string) => `https://picsum.photos/seed/${seed}/900/1200`;
 
+const DEMO_ADMIN_EMAIL = "admin@deneiz.com";
+const DEMO_ADMIN_PASSWORD = "deneiz-admin-123";
+
 async function main() {
   const db = getDb();
   console.log("Seeding…");
 
   await db.insert(settings).values({ id: "default" }).onConflictDoNothing();
 
-  // Admin + sample shopper (Better Auth password hashing is applied on first
-  // sign-in via the API; direct inserts here are PROTOTYPE placeholders)
-  // PROTOTYPE: create real accounts through /api/auth/sign-up/email instead
-  const adminId = randomUUID();
+  // Admin account — created through Better Auth itself so the users row gets
+  // a real hashed credential. A bare users insert (older seeds) can never sign
+  // in and blocks re-signup, so replace it when found.
+  const [legacyAdmin] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, DEMO_ADMIN_EMAIL))
+    .limit(1);
+
+  let hasCredential = false;
+  if (legacyAdmin) {
+    const credentials = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.userId, legacyAdmin.id))
+      .limit(1);
+    hasCredential = credentials.length > 0;
+
+    if (!hasCredential) {
+      // Placeholder row with no sign-in path — references null out or cascade
+      await db.delete(users).where(eq(users.id, legacyAdmin.id));
+    }
+  }
+
+  if (!hasCredential) {
+    await getAuth().api.signUpEmail({
+      body: {
+        name: "Deneiz Admin",
+        email: DEMO_ADMIN_EMAIL,
+        password: DEMO_ADMIN_PASSWORD,
+      },
+    });
+  }
+
+  // Role guarantee independent of the ADMIN_EMAIL bootstrap hook (the hook
+  // only fires on create; this also repairs rows created before it existed)
   await db
-    .insert(users)
-    .values({
-      id: adminId,
-      name: "Deneiz Admin",
-      email: "admin@deneiz.com",
-      role: "super_admin",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .onConflictDoNothing();
+    .update(users)
+    .set({ role: "super_admin", updatedAt: new Date() })
+    .where(eq(users.email, DEMO_ADMIN_EMAIL));
+
+  console.log(`Admin account ready — email: ${DEMO_ADMIN_EMAIL} password: ${DEMO_ADMIN_PASSWORD}`);
 
   const categoryRows = await db
     .insert(categories)

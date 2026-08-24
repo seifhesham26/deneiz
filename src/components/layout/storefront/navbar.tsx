@@ -101,7 +101,7 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Compact mobile/tablet bar */}
+      {/* Compact mobile/tablet bar — brand lives inside the drawer */}
       <div className="content-shell flex h-16 items-center justify-between gap-2 lg:hidden">
         <div className="flex items-center gap-1">
           <button
@@ -112,9 +112,6 @@ export function Navbar() {
           >
             <Menu aria-hidden className="size-6" />
           </button>
-          <Link href="/" className="text-lg font-semibold tracking-wide">
-            {t.common.storeName}
-          </Link>
         </div>
 
         <NavbarSearch />
