@@ -9,6 +9,10 @@ import { NavbarSearch } from "./navbar-search";
 import { useCartStore, selectCartItemCount } from "@/store/cart.store";
 import { useUiStore } from "@/store/ui.store";
 import { useIsHydrated } from "@/hooks/shared/useIsHydrated";
+import { useGetSessionUser } from "@/hooks/storefront/useGetSessionUser";
+import { cn } from "@/lib/cn";
+
+const ADMIN_ROLES = ["super_admin", "manager", "staff"];
 
 export function Navbar() {
   const { t } = useLang();
@@ -16,10 +20,14 @@ export function Navbar() {
   const openCartDrawer = useUiStore((state) => state.openCartDrawer);
   const itemCount = useCartStore(selectCartItemCount);
   const isHydrated = useIsHydrated();
+  // Cached session query — also consumed by the account page and admin guard
+  const { user } = useGetSessionUser();
+  const isAdmin = Boolean(user && ADMIN_ROLES.includes(user.role));
 
   const links = [
     { href: "/", label: t.nav.home },
     { href: "/products", label: t.nav.products },
+    ...(isAdmin ? [{ href: "/admin", label: t.nav.adminPanel }] : []),
   ];
 
   return (
@@ -31,7 +39,12 @@ export function Navbar() {
             <Link
               key={link.href}
               href={link.href}
-              className="text-sm font-medium text-text-secondary transition-colors hover:text-text-primary"
+              className={cn(
+                "text-sm font-medium transition-colors",
+                link.href === "/admin"
+                  ? "text-accent hover:opacity-80"
+                  : "text-text-secondary hover:text-text-primary",
+              )}
             >
               {link.label}
             </Link>

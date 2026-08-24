@@ -6,18 +6,24 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useLang } from "@/components/providers/lang-provider";
 import { useUiStore } from "@/store/ui.store";
+import { useGetSessionUser } from "@/hooks/storefront/useGetSessionUser";
+
+const ADMIN_ROLES = ["super_admin", "manager", "staff"];
 
 export function MobileMenu() {
   const { t } = useLang();
   const pathname = usePathname();
   const isOpen = useUiStore((state) => state.isMobileMenuOpen);
   const setOpen = useUiStore((state) => state.setMobileMenuOpen);
+  const { user } = useGetSessionUser();
+  const isAdmin = Boolean(user && ADMIN_ROLES.includes(user.role));
 
   const links = [
     { href: "/", label: t.nav.home },
     { href: "/products", label: t.nav.products },
     { href: "/wishlist", label: t.nav.wishlist },
     { href: "/account", label: t.nav.account },
+    ...(isAdmin ? [{ href: "/admin", label: `★ ${t.nav.adminPanel}` }] : []),
   ];
 
   function close() {

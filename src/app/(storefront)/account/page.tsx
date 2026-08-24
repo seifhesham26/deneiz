@@ -1,7 +1,9 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { pushToast } from "@/components/ui/toast";
@@ -33,9 +35,16 @@ function translateStatus(status: string, t: Dictionary): string {
   return map[status] ?? status;
 }
 
-export default function AccountPage() {
+function AccountPageContent() {
   const { locale, t } = useLang();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // The proxy sends bounced admins here with ?next=/admin — same-origin only
+  const rawNext = searchParams.get("next") ?? "/account";
+  const nextPath = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/account";
+
   const { user, isLoading } = useGetSessionUser();
   const myOrders = useGetMyOrders();
 
@@ -45,16 +54,23 @@ export default function AccountPage() {
   }
 
   if (isLoading) {
-    return <div className="content-shell section-y" aria-busy="true" />;
+    return <div aria-busy="true" />;
   }
 
   if (!user) {
-    // Refetching the session swaps the card for the dashboard without a reload
-    return <AuthCard onSuccess={() => void queryClient.invalidateQueries()} />;
+    // Refetching the session swaps the card for the dashboard; admins then
+    // continue to the admin route that originally sent them here
+    return (
+      <AuthCard
+        onSuccess={() => {
+          void queryClient.invalidateQueries().then(() => router.push(nextPath));
+        }}
+      />
+    );
   }
 
   return (
-    <div className="content-shell section-y flex flex-col gap-10">
+    <div className="flex flex-col gap-10">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-semibold">{t.account.welcome(user.name)}</h1>
@@ -110,5 +126,14 @@ export default function AccountPage() {
         </Link>
       )}
     </div>
+  );
+}
+
+export default function AccountPage() {
+  // Suspense required: the content reads useSearchParams for the next hint
+  return (
+    <Suspense>
+      <AccountPageContent />
+    </Suspense>
   );
 }
