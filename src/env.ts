@@ -34,6 +34,11 @@ export const env = {
     return optional("BETTER_AUTH_URL") ?? "http://localhost:3000";
   },
 
+  /** Better Auth dashboard (dash plugin) key — absent means the dashboard integration is off. */
+  get betterAuthApiKey(): string | undefined {
+    return optional("BETTER_AUTH_API_KEY");
+  },
+
   /** Absent key means transactional emails are skipped (logged instead). */
   get resendApiKey(): string | undefined {
     return optional("RESEND_API_KEY");

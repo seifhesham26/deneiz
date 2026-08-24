@@ -17,6 +17,7 @@
     "prepare": "husky || true"
   },
   "dependencies": {
+    "@better-auth/infra": "^0.4.2",
     "@hookform/resolvers": "^5.9.1",
     "@neondatabase/serverless": "^1.1.0",
     "@tanstack/react-query": "^5.102.2",
