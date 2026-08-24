@@ -9,6 +9,7 @@ import { useLang } from "@/components/providers/lang-provider";
 import { useUiStore } from "@/store/ui.store";
 import { useGetSessionUser } from "@/hooks/storefront/useGetSessionUser";
 import { useBodyScrollLock } from "@/hooks/shared/useBodyScrollLock";
+import { useMediaQuery } from "@/hooks/shared/useMediaQuery";
 
 const ADMIN_ROLES = ["super_admin", "manager", "staff"];
 
@@ -22,6 +23,13 @@ export function MobileMenu() {
 
   // The hamburger is visible below lg, so the drawer must be too
   useBodyScrollLock(isOpen);
+
+  // Auto-close when the viewport grows past lg so a resize can't leave the
+  // drawer mounted (and the page scroll-locked) with no toggle to reach it
+  const isDesktop = useMediaQuery("(min-width: 64rem)");
+  useEffect(() => {
+    if (isDesktop) setOpen(false);
+  }, [isDesktop, setOpen]);
 
   useEffect(() => {
     if (!isOpen) return;

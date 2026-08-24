@@ -21,6 +21,7 @@ import {
 import { useLang } from "@/components/providers/lang-provider";
 import { useUiStore } from "@/store/ui.store";
 import { useBodyScrollLock } from "@/hooks/shared/useBodyScrollLock";
+import { useMediaQuery } from "@/hooks/shared/useMediaQuery";
 import { cn } from "@/lib/cn";
 
 export function Sidebar() {
@@ -35,6 +36,13 @@ export function Sidebar() {
   }, [pathname, setOpen]);
 
   useBodyScrollLock(isOpen);
+
+  // The drawer only exists below lg — close it if the viewport grows so the
+  // scroll lock can never outlive its trigger
+  const isDesktop = useMediaQuery("(min-width: 64rem)");
+  useEffect(() => {
+    if (isDesktop) setOpen(false);
+  }, [isDesktop, setOpen]);
 
   useEffect(() => {
     if (!isOpen) return;

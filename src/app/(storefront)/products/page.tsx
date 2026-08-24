@@ -144,6 +144,11 @@ function ProductsPageContent() {
 
 /** Page numbers around the current page, with ellipsis gaps for far ranges. */
 function buildPageWindow(current: number, total: number): (number | "gap")[] {
+  // Short ranges always render every page — an ellipsis would only hide one
+  if (total <= 6) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+
   const desired = new Set(
     [1, 2, current - 1, current, current + 1, total - 1, total].filter(
       (page) => page >= 1 && page <= total,
